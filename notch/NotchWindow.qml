@@ -335,7 +335,7 @@ PanelWindow {
     // ---------------------------------------------------------------------
     readonly property int baseBodyW: 168
     readonly property int volumeBodyW: 248
-    readonly property int statusBodyW: 376
+    readonly property int statusBodyW: Math.max(336, Math.min(500, Math.ceil(statusPeekRow.implicitWidth) + 38))
     readonly property int reliefBodyW: 420
     readonly property int rageBodyW: 468
     readonly property int displayBodyW: 460
@@ -388,7 +388,7 @@ PanelWindow {
     readonly property int pupilSize: 12
 
     // Fixed stable window dimensions (mencegah Wayland surface resize jitter)
-    readonly property int windowWidth: 520
+    readonly property int windowWidth: 560
     readonly property int windowHeight: (root.showWifiMenu || root.showBluetoothMenu) ? 320 : (root.showDisplayMenu ? 110 : 96)
     anchors.top: true
     implicitWidth: windowWidth
@@ -1476,11 +1476,12 @@ PanelWindow {
         // -----------------------------------------------------------------
         // HOVER STATUS VIEW: Dynamic Island Status Capsule (Battery · Clock · WiFi)
         // -----------------------------------------------------------------
-        Row {
-            id: statusPeekRow
+        Item {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 14
+            width: Math.max(0, notchVisual.width - root.shoulder * 2 - 16)
+            height: parent.height
+            clip: true
 
             readonly property bool activeView: root.showStatusPeek && !root.showBatteryRage && !root.showBatteryRelief && !root.showVolume && !root.showBrightness && !root.showDisplayMenu && !root.showWifiMenu && !root.showBluetoothMenu
             opacity: activeView ? 1.0 : 0.0
@@ -1489,6 +1490,11 @@ PanelWindow {
 
             Behavior on opacity { NumberAnimation { duration: root.animDuration; easing.type: Easing.OutCubic } }
             Behavior on scale   { NumberAnimation { duration: root.animDuration; easing.type: Easing.OutCubic } }
+
+            Row {
+                id: statusPeekRow
+                anchors.centerIn: parent
+                spacing: 14
 
             // 1. Left Segment: Battery Icon + Dot-Matrix Percentage
             Row {
@@ -1581,13 +1587,18 @@ PanelWindow {
                 }
 
                 Text {
+                    id: statusWifiText
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.activeWifiSsid || "OFFLINE"
                     font.family: fontNMono.name || "monospace"
                     font.pixelSize: 10
                     font.letterSpacing: 0.6
                     color: root.activeWifiConnected ? "#FFFFFF" : Qt.rgba(1.0, 1.0, 1.0, 0.50)
+                    width: Math.min(implicitWidth, 185)
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
                 }
+            }
             }
         }
 
@@ -2108,7 +2119,7 @@ PanelWindow {
                                 font.bold: modelData.is_connected
                                 color: modelData.is_connected ? "#FFFFFF" : (netMouse.containsMouse ? "#FFFFFF" : "#CCCCCC")
                                 elide: Text.ElideRight
-                                width: 175
+                                width: Math.max(120, netItem.width - 78)
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                         }
