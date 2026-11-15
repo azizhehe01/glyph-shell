@@ -134,16 +134,22 @@ def connect_wifi(ssid, password=None):
         if not password and ssid in saved:
             cmd = ["nmcli", "connection", "up", "id", ssid]
         elif password:
+            if ssid in saved:
+                subprocess.run(
+                    ["nmcli", "connection", "delete", "id", ssid],
+                    capture_output=True,
+                    timeout=3,
+                )
             cmd = ["nmcli", "dev", "wifi", "connect", ssid, "password", password]
         else:
             cmd = ["nmcli", "dev", "wifi", "connect", ssid]
 
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
         if res.returncode == 0:
-            return {"success": True, "message": f"Connected to {ssid}"}
+            return {"success": True, "ssid": ssid, "message": f"Connected to {ssid}"}
         else:
             err = res.stderr.strip() or res.stdout.strip()
-            return {"success": False, "message": err or "Failed to connect"}
+            return {"success": False, "ssid": ssid, "message": err or "Failed to connect"}
     except Exception as e:
         return {"success": False, "message": str(e)}
 

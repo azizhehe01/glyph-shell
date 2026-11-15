@@ -15,11 +15,53 @@ PanelWindow {
 
     WlrLayershell.namespace: "quickshell:notch"
     WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: root.isMenuOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     readonly property bool isMenuOpen: showWifiMenu || showBluetoothMenu
     function closeAllMenus(): void {
         closeWifiMenu();
         closeBluetoothMenu();
+    }
+
+    HyprlandFocusGrab {
+        id: menuFocusGrab
+        windows: [root]
+        active: false
+        onCleared: {
+            if (root.isMenuOpen) {
+                root.closeAllMenus();
+            }
+        }
+    }
+
+    Timer {
+        id: menuFocusTimer
+        interval: 40
+        repeat: false
+        onTriggered: {
+            menuFocusGrab.active = root.isMenuOpen;
+        }
+    }
+
+    onIsMenuOpenChanged: {
+        if (isMenuOpen) {
+            menuFocusTimer.restart();
+        } else {
+            menuFocusGrab.active = false;
+        }
+    }
+
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.isMenuOpen
+        onActivated: {
+            if (root.passwordPromptSsid !== "") {
+                root.passwordPromptSsid = "";
+                root.enteredPassword = "";
+            } else {
+                root.closeAllMenus();
+            }
+        }
     }
 
     // =========================================================================
@@ -81,8 +123,10 @@ PanelWindow {
     readonly property var wifiNetworks: (root.wifiData && root.wifiData.networks) ? root.wifiData.networks : []
     readonly property bool isWifiConnected: root.wifiData && (root.wifiData.active_ssid !== "" && root.wifiData.active_ssid !== null)
     property bool isScanningWifi: false
+    property string connectingWifiSsid: ""
     property string passwordPromptSsid: ""
     property string enteredPassword: ""
+    property bool showPasswordText: false
 
     // ---------------------------------------------------------------------
     // Bluetooth Manager Properties (Ctrl + Super + B — Pure BlueZ Native)
@@ -391,6 +435,7 @@ PanelWindow {
     }
 
     function connectToNetwork(ssid, pwd): void {
+        root.connectingWifiSsid = ssid;
         connectWifiProc.targetSsid = ssid;
         connectWifiProc.targetPwd = pwd ? pwd : "";
         connectWifiProc.running = false;
@@ -443,8 +488,21 @@ PanelWindow {
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
-                root.passwordPromptSsid = "";
-                root.enteredPassword = "";
+                root.connectingWifiSsid = "";
+                let ok = false;
+                try {
+                    let res = JSON.parse(this.text.trim());
+                    ok = !!res.success;
+                } catch (e) {}
+
+                if (ok) {
+                    root.passwordPromptSsid = "";
+                    root.enteredPassword = "";
+                    root.showPasswordText = false;
+                } else if (connectWifiProc.targetSsid !== "") {
+                    // If saved connection failed (e.g. password changed/missing), open password input
+                    root.passwordPromptSsid = connectWifiProc.targetSsid;
+                }
                 root.queryWifi();
             }
         }
@@ -2112,8 +2170,17 @@ PanelWindow {
                         MouseArea {
                             id: netMouse
                             anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
+                            onClicked: mouse => {
+                                if (mouse.button === Qt.RightButton && modelData.is_locked) {
+                                    // Right-click always opens password input (useful to change saved password)
+                                    root.passwordPromptSsid = (root.passwordPromptSsid === modelData.ssid) ? "" : modelData.ssid;
+                                    root.enteredPassword = "";
+                                    root.showPasswordText = false;
+                                    return;
+                                }
                                 if (modelData.is_connected) {
                                     root.disconnectCurrent();
                                 } else if (modelData.is_saved || !modelData.is_locked) {
@@ -2121,6 +2188,7 @@ PanelWindow {
                                 } else {
                                     root.passwordPromptSsid = (root.passwordPromptSsid === modelData.ssid) ? "" : modelData.ssid;
                                     root.enteredPassword = "";
+                                    root.showPasswordText = false;
                                 }
                             }
                         }
@@ -2128,11 +2196,35 @@ PanelWindow {
 
                     // Inline Password Input Drawer
                     Item {
+                        id: pwdDrawer
                         anchors.bottom: parent.bottom
                         anchors.left: parent.left
                         anchors.right: parent.right
                         height: 30
                         visible: root.passwordPromptSsid === modelData.ssid
+
+                        onVisibleChanged: {
+                            if (visible) {
+                                pwdFocusDelay.restart();
+                            }
+                        }
+
+                        Component.onCompleted: {
+                            if (visible) {
+                                pwdFocusDelay.restart();
+                            }
+                        }
+
+                        Timer {
+                            id: pwdFocusDelay
+                            interval: 45
+                            repeat: false
+                            onTriggered: {
+                                if (pwdDrawer.visible) {
+                                    pwdInput.forceActiveFocus();
+                                }
+                            }
+                        }
 
                         Row {
                             anchors.fill: parent
@@ -2147,20 +2239,37 @@ PanelWindow {
                                 border.color: pwdInput.activeFocus ? "#D71921" : "#444444"
                                 border.width: 1
 
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.IBeamCursor
+                                    onClicked: pwdInput.forceActiveFocus()
+                                }
+
                                 TextInput {
                                     id: pwdInput
-                                    anchors.fill: parent
+                                    anchors.left: parent.left
+                                    anchors.right: toggleShowPwdBtn.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
                                     anchors.leftMargin: 6
-                                    anchors.rightMargin: 6
+                                    anchors.rightMargin: 4
                                     verticalAlignment: TextInput.AlignVCenter
                                     font.family: fontNMono.name || "monospace"
                                     font.pixelSize: 10
                                     color: "#FFFFFF"
-                                    echoMode: TextInput.Password
+                                    clip: true
+                                    selectByMouse: true
+                                    echoMode: root.showPasswordText ? TextInput.Normal : TextInput.Password
                                     focus: root.passwordPromptSsid === modelData.ssid
                                     onTextChanged: root.enteredPassword = text
                                     onAccepted: {
-                                        root.connectToNetwork(modelData.ssid, text);
+                                        if (text.length > 0) {
+                                            root.connectToNetwork(modelData.ssid, text);
+                                        }
+                                    }
+                                    Keys.onEscapePressed: {
+                                        root.passwordPromptSsid = "";
+                                        root.enteredPassword = "";
                                     }
 
                                     Text {
@@ -2170,7 +2279,38 @@ PanelWindow {
                                         font.family: fontNMono.name || "monospace"
                                         font.pixelSize: 9
                                         color: "#555555"
-                                        visible: !pwdInput.text
+                                        visible: !pwdInput.text && !pwdInput.inputMethodComposing
+                                    }
+                                }
+
+                                // Show / Hide Password Toggle
+                                Rectangle {
+                                    id: toggleShowPwdBtn
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 3
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 28
+                                    height: parent.height - 6
+                                    radius: 3
+                                    color: showPwdMa.containsMouse ? "#222222" : "transparent"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.showPasswordText ? "HIDE" : "SHOW"
+                                        font.family: fontNMono.name || "monospace"
+                                        font.pixelSize: 8
+                                        color: root.showPasswordText ? "#D71921" : "#888888"
+                                    }
+
+                                    MouseArea {
+                                        id: showPwdMa
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root.showPasswordText = !root.showPasswordText;
+                                            pwdInput.forceActiveFocus();
+                                        }
                                     }
                                 }
                             }
@@ -2179,11 +2319,11 @@ PanelWindow {
                                 width: 56
                                 height: parent.height
                                 radius: 4
-                                color: "#D71921"
+                                color: (root.connectingWifiSsid === modelData.ssid) ? "#444444" : "#D71921"
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "CONNECT"
+                                    text: (root.connectingWifiSsid === modelData.ssid) ? "WAIT..." : "CONNECT"
                                     font.family: fontNMono.name || "monospace"
                                     font.pixelSize: 9
                                     font.bold: true
@@ -2193,7 +2333,13 @@ PanelWindow {
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.connectToNetwork(modelData.ssid, root.enteredPassword)
+                                    onClicked: {
+                                        if (root.enteredPassword.length > 0) {
+                                            root.connectToNetwork(modelData.ssid, root.enteredPassword);
+                                        } else {
+                                            pwdInput.forceActiveFocus();
+                                        }
+                                    }
                                 }
                             }
                         }
