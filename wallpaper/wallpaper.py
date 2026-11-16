@@ -197,7 +197,14 @@ def collect_wallpapers():
 
 def get_ascii_state():
     ensure_dirs_and_migrate()
-    default_state = {"enabled": False, "preset": "topo-wave"}
+    gpu_info = ensure_gpu_assets()
+    default_state = {
+        "enabled": False,
+        "preset": "topo-wave",
+        "wallpaper": gpu_info.get("wallpaper", ""),
+        "atlas": gpu_info.get("atlas", ""),
+        "qsb": gpu_info.get("qsb", ""),
+    }
     if os.path.exists(ASCII_STATE_FILE):
         try:
             with open(ASCII_STATE_FILE, "r") as f:
@@ -205,6 +212,9 @@ def get_ascii_state():
             return {
                 "enabled": bool(data.get("enabled", False)),
                 "preset": str(data.get("preset", "topo-wave")),
+                "wallpaper": gpu_info.get("wallpaper", ""),
+                "atlas": gpu_info.get("atlas", ""),
+                "qsb": gpu_info.get("qsb", ""),
             }
         except Exception:
             pass
@@ -219,7 +229,247 @@ def set_ascii_state(enabled: bool, preset: str = "topo-wave"):
             json.dump(state, f)
     except Exception:
         pass
+    if enabled:
+        render_ascii_lock_wallpaper(state["preset"])
     return state
+
+
+def ensure_gpu_assets():
+    """Generates ascii_font_atlas.png and compiles ascii_wallpaper.frag.qsb if needed."""
+    wp_dir = os.path.join(SHELL_DIR, "wallpaper")
+    atlas_path = os.path.join(wp_dir, "ascii_font_atlas.png")
+    frag_path = os.path.join(wp_dir, "ascii_wallpaper.frag")
+    qsb_path = os.path.join(wp_dir, "ascii_wallpaper_v2.frag.qsb")
+    font_path = os.path.join(SHELL_DIR, "assets", "fonts", "LetteraMonoLL-Regular.otf")
+
+    # Ensure lock.sh is always executable
+    lock_sh = os.path.join(SHELL_DIR, "lockscreen", "lock.sh")
+    if os.path.isfile(lock_sh):
+        try:
+            os.chmod(lock_sh, 0o755)
+        except Exception:
+            pass
+
+    # 1. Generate 16-slot 1024x64 glyph atlas PNG from LetteraMonoLL-Regular.otf
+    if not os.path.exists(atlas_path):
+        try:
+            from PIL import ImageDraw, ImageFont
+            chars = [" ", ".", ":", "-", "=", "+", "*", "#", "%", "@", "0", "1", "o", "O", "~", "$"]
+            cell_size = 64
+            img = Image.new("RGBA", (cell_size * len(chars), cell_size), (0, 0, 0, 255))
+            draw = ImageDraw.Draw(img)
+            try:
+                fnt = ImageFont.truetype(font_path, 46)
+            except Exception:
+                fnt = ImageFont.load_default()
+            for i, ch in enumerate(chars):
+                if ch == " ":
+                    continue
+                cx = i * cell_size + cell_size * 0.5
+                cy = cell_size * 0.5
+                draw.text((cx, cy), ch, fill=(255, 255, 255, 255), font=fnt, anchor="mm", stroke_width=1, stroke_fill=(255, 255, 255, 255))
+            img.save(atlas_path, "PNG")
+        except Exception:
+            pass
+
+    # 2. Compile GLSL 440 fragment shader to Qt6 .qsb if needed
+    if os.path.exists(frag_path):
+        need_compile = not os.path.exists(qsb_path)
+        if not need_compile:
+            try:
+                need_compile = os.path.getmtime(frag_path) > os.path.getmtime(qsb_path)
+            except Exception:
+                pass
+        if need_compile:
+            qsb_bin = shutil.which("qsb") or "/usr/lib64/qt6/bin/qsb"
+            if not os.path.isfile(qsb_bin):
+                qsb_bin = "/usr/lib/qt6/bin/qsb"
+            if os.path.isfile(qsb_bin):
+                try:
+                    subprocess.run(
+                        [qsb_bin, "--qt6", "-o", qsb_path, frag_path],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=8,
+                    )
+                except Exception:
+                    pass
+
+    wp = get_current_wallpaper()
+    if not wp or not os.path.isfile(wp):
+        info = collect_wallpapers()
+        wps = info.get("wallpapers", [])
+        if wps:
+            wp = wps[0]["path"]
+    return {"atlas": atlas_path, "qsb": qsb_path, "wallpaper": wp or ""}
+
+
+def render_ascii_lock_wallpaper(preset: str = None):
+    """Renders a crisp 1920x1080 ASCII wallpaper PNG to /tmp/nothing_lock_ascii.png for hyprlock."""
+    import math
+    from PIL import ImageDraw, ImageFont
+
+    if not preset:
+        preset = get_ascii_state().get("preset", "topo-wave")
+
+    out_path = "/tmp/nothing_lock_ascii.png"
+    font_path = os.path.join(SHELL_DIR, "assets", "fonts", "LetteraMonoLL-Regular.otf")
+    w, h = 1920, 1080
+    cols, rows = 64, 36
+    cell_w = w / cols
+    cell_h = h / rows
+
+    try:
+        img = Image.new("RGB", (w, h), (7, 8, 10))
+        draw = ImageDraw.Draw(img)
+        try:
+            fnt = ImageFont.truetype(font_path, int(cell_h * 0.66))
+        except Exception:
+            fnt = ImageFont.load_default()
+
+        dim_col = (95, 102, 114)
+        bright_col = (232, 236, 242)
+        red_col = (215, 25, 33)
+        t = 2.4
+
+        if preset == "ascii-torus":
+            ramp = ".,-~:;=!*#$@"
+            cx_col, cy_row = int(cols * 0.56), int(rows * 0.50)
+            A, B = 1.15, 0.75
+            cosA, sinA = math.cos(A), math.sin(A)
+            cosB, sinB = math.cos(B), math.sin(B)
+            zbuf = [0.0] * (cols * rows)
+            out_ch = [""] * (cols * rows)
+            out_lum = [0] * (cols * rows)
+
+            theta = 0.0
+            while theta < 6.283:
+                cost, sint = math.cos(theta), math.sin(theta)
+                phi = 0.0
+                while phi < 6.283:
+                    cosp, sinp = math.cos(phi), math.sin(phi)
+                    circle_x = 2.0 + 1.05 * cost
+                    circle_y = 1.05 * sint
+                    x3 = circle_x * (cosB * cosp + sinA * sinB * sinp) - circle_y * cosA * sinB
+                    y3 = circle_x * (sinB * cosp - sinA * cosB * sinp) + circle_y * cosA * cosB
+                    z3 = 4.8 + cosA * circle_x * sinp + circle_y * sinA
+                    ooz = 1.0 / z3
+                    xp = int(cx_col + 26.0 * ooz * x3)
+                    yp = int(cy_row - 14.5 * ooz * y3)
+                    if 0 <= xp < cols and 0 <= yp < rows:
+                        L = cosp * cost * sinB - cosA * cost * sinp - sinA * sint + cosB * (cosA * sint - cost * sinA * sinp)
+                        b_idx = xp + yp * cols
+                        if ooz > zbuf[b_idx]:
+                            zbuf[b_idx] = ooz
+                            lum_idx = max(0, min(11, int((L + 1.4) * 4.5)))
+                            out_ch[b_idx] = ramp[lum_idx]
+                            out_lum[b_idx] = lum_idx
+                    phi += 0.045
+                theta += 0.11
+
+            for r in range(rows):
+                py = (r + 0.5) * cell_h
+                for c in range(cols):
+                    px = (c + 0.5) * cell_w
+                    m_idx = c + r * cols
+                    ch = out_ch[m_idx]
+                    if not ch:
+                        if r % 2 == 0 and c % 2 == 0:
+                            draw.text((px, py), ".", fill=(58, 64, 72), font=fnt, anchor="mm")
+                        continue
+                    lv = out_lum[m_idx]
+                    col = red_col if lv >= 10 else (bright_col if lv >= 5 else dim_col)
+                    draw.text((px, py), ch, fill=col, font=fnt, anchor="mm")
+
+        elif preset == "glyph-vortex":
+            ramp = "  .:oO0*#@"
+            vx, vy = w * 0.56, h * 0.50
+            for r in range(rows):
+                py = (r + 0.5) * cell_h
+                for c in range(cols):
+                    px = (c + 0.5) * cell_w
+                    dx, dy = px - vx, py - vy
+                    rad = math.hypot(dx, dy)
+                    ang = math.atan2(dy, dx)
+                    spiral = math.sin(ang * 4.0 - rad * 0.018 + t * 2.0)
+                    rings = math.cos(rad * 0.032 - t * 2.6)
+                    val = max(0.0, min(0.999, (spiral * 0.55 + rings * 0.45 + 1.0) * 0.5))
+                    idx = int(val * len(ramp))
+                    if idx <= 1:
+                        continue
+                    col = red_col if abs(rad - 210.0) < 20.0 else (bright_col if idx >= len(ramp) - 2 else dim_col)
+                    draw.text((px, py), ramp[idx], fill=col, font=fnt, anchor="mm")
+
+        elif preset == "cyber-rain":
+            chars = "0123456789ABCDEF:+*#<>="
+            for c in range(cols):
+                px = (c + 0.5) * cell_w
+                head = (c * 7 + 11) % rows
+                length = 8 + (c * 3) % 9
+                is_red = (c % 7 == 0)
+                for k in range(length):
+                    r = (head - k) % rows
+                    py = (r + 0.5) * cell_h
+                    ch = chars[(c * 31 + r * 17) % len(chars)]
+                    col = red_col if (k == 0 and is_red) else (bright_col if k <= 1 else dim_col)
+                    draw.text((px, py), ch, fill=col, font=fnt, anchor="mm")
+
+        elif preset == "halftone-pulse":
+            ramp = "  .:oO0@#"
+            s1x, s1y = w * 0.62, h * 0.46
+            s2x, s2y = w * 0.42, h * 0.56
+            for r in range(rows):
+                py = (r + 0.5) * cell_h
+                for c in range(cols):
+                    px = (c + 0.5) * cell_w
+                    d1 = math.hypot(px - s1x, py - s1y)
+                    d2 = math.hypot(px - s2x, py - s2y)
+                    moire = (math.sin(d1 * 0.035) + math.sin(d2 * 0.042) + 2.0) * 0.25
+                    idx = max(0, min(len(ramp) - 1, int(moire * len(ramp))))
+                    if idx <= 1:
+                        continue
+                    col = red_col if (d2 < 210 and idx >= len(ramp) - 2) else (bright_col if idx >= len(ramp) - 3 else dim_col)
+                    draw.text((px, py), ramp[idx], fill=col, font=fnt, anchor="mm")
+
+        elif preset == "wallpaper-ascii":
+            ramp = "  .:-=+*#%@"
+            sample = sample_wallpaper_ascii(cols, rows)
+            cells = sample.get("cells", [])
+            if len(cells) >= cols * rows:
+                for r in range(rows):
+                    py = (r + 0.5) * cell_h
+                    for c in range(cols):
+                        px = (c + 0.5) * cell_w
+                        lum, hex_c = cells[r * cols + c]
+                        idx = max(0, min(len(ramp) - 1, int(lum * len(ramp))))
+                        if idx <= 1:
+                            continue
+                        draw.text((px, py), ramp[idx], fill=hex_c, font=fnt, anchor="mm")
+
+        else:  # topo-wave
+            ramp = "  .:-=+*#%@"
+            for r in range(rows):
+                py = (r + 0.5) * cell_h
+                ny = r / rows
+                for c in range(cols):
+                    px = (c + 0.5) * cell_w
+                    nx = c / cols
+                    v1 = math.sin(nx * 6.2 + t * 1.1 + math.cos(ny * 4.0 - t * 0.7))
+                    v2 = math.cos(ny * 5.5 - t * 0.8 + math.sin(nx * 4.8 + t * 0.6))
+                    val = max(0.0, min(0.999, ((v1 + v2) * 0.5 + 1.0) * 0.5))
+                    idx = int(val * len(ramp))
+                    if idx <= 1:
+                        continue
+                    col = red_col if idx == len(ramp) - 1 else (bright_col if idx >= len(ramp) - 2 else dim_col)
+                    draw.text((px, py), ramp[idx], fill=col, font=fnt, anchor="mm")
+
+        img.save(out_path, "PNG")
+        if os.path.lexists(LOCK_SYMLINK):
+            os.remove(LOCK_SYMLINK)
+        os.symlink(out_path, LOCK_SYMLINK)
+    except Exception:
+        pass
+    return out_path
 
 
 def sample_wallpaper_ascii(cols=76, rows=42):
@@ -446,6 +696,11 @@ def main():
 
     elif cmd == "ascii-state":
         print(json.dumps(get_ascii_state()))
+
+    elif cmd == "render-ascii-lock":
+        preset = sys.argv[2] if len(sys.argv) >= 3 else None
+        out = render_ascii_lock_wallpaper(preset)
+        print(json.dumps({"status": "rendered-ascii-lock", "path": out}))
 
     elif cmd == "sample-ascii":
         print(json.dumps(sample_wallpaper_ascii()))
