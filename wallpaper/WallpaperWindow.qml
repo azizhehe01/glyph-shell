@@ -17,6 +17,7 @@ PanelWindow {
 
     // Reference to DesktopWidgetsWindow to refresh frosted glass blur on apply
     property var desktopWidgetsRef: null
+    property var asciiWallpaperRef: null
 
     WlrLayershell.namespace: "quickshell:wallpaper"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -47,11 +48,110 @@ PanelWindow {
     property string previewedWallpaper: ""
     property int selectedIndex: 0
 
-    readonly property var currentSelectedObj: (root.wallpapers && root.wallpapers.length > 0 && root.selectedIndex >= 0 && root.selectedIndex < root.wallpapers.length)
-        ? root.wallpapers[root.selectedIndex]
-        : null
+    // Dual-Mode: "image" vs "ascii"
+    property string activeMode: "image"
+    property bool originalAsciiEnabled: false
+    property string originalAsciiPreset: "topo-wave"
+    property int selectedAsciiIndex: 0
 
-    readonly property bool isPreviewingNew: (root.currentSelectedObj && root.originalWallpaper !== "" && root.currentSelectedObj.path !== root.originalWallpaper)
+    readonly property var asciiPresets: [
+        {
+            id: "topo-wave",
+            title: "TOPOGRAPHIC WAVE",
+            res: "INTERACTIVE · RIPPLE",
+            tag: "CONTOUR",
+            art: [
+                " · . : - = + * # % @ % # * + = - : . · ",
+                " . : - = + * # @ # * + = - : . · . : - ",
+                " : - = + * % @ @ % * + = - : . · . : - =",
+                " - = + * # @ % * + = - : . · . : - = + *",
+                " = + * # % * + = - : . · . : - = + * # %"
+            ]
+        },
+        {
+            id: "glyph-vortex",
+            title: "NOTHING GLYPH VORTEX",
+            res: "INTERACTIVE · ORBIT",
+            tag: "GLYPH",
+            art: [
+                "      · • ○ ◎ ● ╬ ● ◎ ○ • ·      ",
+                "   • ○ ◎ ● ╬ ╋ ▓ ╋ ╬ ● ◎ ○ •   ",
+                " ○ ◎ ● ╬ ╋ ▓ █ ● █ ▓ ╋ ╬ ● ◎ ○ ",
+                "   • ○ ◎ ● ╬ ╋ ▓ ╋ ╬ ● ◎ ○ •   ",
+                "      · • ○ ◎ ● ╬ ● ◎ ○ • ·      "
+            ]
+        },
+        {
+            id: "cyber-rain",
+            title: "TERMINAL GLYPH RAIN",
+            res: "INTERACTIVE · REPEL",
+            tag: "MATRIX",
+            art: [
+                " 0  F  ∷  A  ⋮  7  +  C  ∶  9  #  E ",
+                " 1  A  ∶  B  ⋯  4  *  D  ∷  2  +  F ",
+                " 8  C  ⋮  0  +  9  #  A  ⋮  5  *  0 ",
+                " 4  E  ⋯  F  *  2  ∷  1  ⋯  C  #  7 ",
+                " F  0  +  3  #  B  ∶  8  +  E  ∷  1 "
+            ]
+        },
+        {
+            id: "ascii-torus",
+            title: "3D ASCII TORUS",
+            res: "INTERACTIVE · 3D TILT",
+            tag: "3D DONUT",
+            art: [
+                "        . , - ~ : ; = ! * #        ",
+                "    , - ~ : ; = ! * # $ @ $ # *    ",
+                "  - ~ : = ! * # @ . . @ # * ! = :  ",
+                "    , - ~ : ; = ! * # $ @ $ # *    ",
+                "        . , - ~ : ; = ! * #        "
+            ]
+        },
+        {
+            id: "halftone-pulse",
+            title: "HALFTONE MOIRÉ CRT",
+            res: "INTERACTIVE · MOIRÉ",
+            tag: "RETRO CRT",
+            art: [
+                " · ∘ ○ ◌ ◍ ◎ ● █ ● ◎ ◍ ◌ ○ ∘ · ",
+                " ∘ ○ ◌ ◍ ◎ ● █ ◎ █ ● ◎ ◍ ◌ ○ ∘ ",
+                " ○ ◌ ◍ ◎ ● █ ◎ · ◎ █ ● ◎ ◍ ◌ ○ ",
+                " ∘ ○ ◌ ◍ ◎ ● █ ◎ █ ● ◎ ◍ ◌ ○ ∘ ",
+                " · ∘ ○ ◌ ◍ ◎ ● █ ● ◎ ◍ ◌ ○ ∘ · "
+            ]
+        },
+        {
+            id: "wallpaper-ascii",
+            title: "WALLPAPER TO ASCII",
+            res: "CHAMELEON · PHOTO",
+            tag: "LIVE PHOTO",
+            art: [
+                " ░ ▒ ▓ █ ▓ ▒ ░ · . : - = + * # % ",
+                " ▒ ▓ █ @ █ ▓ ▒ ░ · : = + * # % @ ",
+                " ▓ █ @ # @ █ ▓ ▒ · - + * # % @ █ ",
+                " ▒ ▓ █ @ █ ▓ ▒ ░ · : = + * # % @ ",
+                " ░ ▒ ▓ █ ▓ ▒ ░ · . : - = + * # % "
+            ]
+        }
+    ]
+
+    readonly property var currentSelectedObj: {
+        if (root.activeMode === "ascii") {
+            return (root.selectedAsciiIndex >= 0 && root.selectedAsciiIndex < root.asciiPresets.length)
+                ? root.asciiPresets[root.selectedAsciiIndex]
+                : null;
+        }
+        return (root.wallpapers && root.wallpapers.length > 0 && root.selectedIndex >= 0 && root.selectedIndex < root.wallpapers.length)
+            ? root.wallpapers[root.selectedIndex]
+            : null;
+    }
+
+    readonly property bool isPreviewingNew: {
+        if (root.activeMode === "ascii") {
+            return !root.originalAsciiEnabled || (root.currentSelectedObj && root.currentSelectedObj.id !== root.originalAsciiPreset);
+        }
+        return root.originalAsciiEnabled || (root.currentSelectedObj && root.originalWallpaper !== "" && root.currentSelectedObj.path !== root.originalWallpaper);
+    }
 
     // Official Nothing OS Typography
     FontLoader { id: fontNdot55; source: Qt.resolvedUrl("../assets/fonts/Ndot55-Regular.otf") }
@@ -154,6 +254,18 @@ PanelWindow {
                         }
                     }
                     root.selectedIndex = activeIdx;
+                    if (data.ascii) {
+                        root.originalAsciiEnabled = !!data.ascii.enabled;
+                        if (data.ascii.preset) {
+                            root.originalAsciiPreset = data.ascii.preset;
+                            for (var j = 0; j < root.asciiPresets.length; j++) {
+                                if (root.asciiPresets[j].id === data.ascii.preset) {
+                                    root.selectedAsciiIndex = j;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     centerTimer.restart();
                 } catch (e) {}
             }
@@ -165,10 +277,22 @@ PanelWindow {
         interval: 30
         repeat: false
         onTriggered: {
-            if (filmstripList.count > 0) {
+            if (root.activeMode === "ascii") {
+                if (asciiFilmstripList.count > 0) {
+                    asciiFilmstripList.positionViewAtIndex(root.selectedAsciiIndex, ListView.Center);
+                }
+            } else if (filmstripList.count > 0) {
                 filmstripList.positionViewAtIndex(root.selectedIndex, ListView.Center);
             }
         }
+    }
+
+    // Process to commit ASCII preset state
+    Process {
+        id: applyAsciiProc
+        property string targetPreset: "topo-wave"
+        command: ["python3", Quickshell.shellDir + "/wallpaper/wallpaper.py", "apply-ascii", targetPreset]
+        running: false
     }
 
     // Process to commit wallpaper & update frosted glass blur
@@ -204,7 +328,51 @@ PanelWindow {
         }
     }
 
+    function switchMode(newMode: string): void {
+        if (newMode !== "image" && newMode !== "ascii") return;
+        root.activeMode = newMode;
+        if (newMode === "ascii") {
+            previewDebounceTimer.stop();
+            var presetObj = root.asciiPresets[root.selectedAsciiIndex];
+            if (root.asciiWallpaperRef && presetObj) {
+                root.asciiWallpaperRef.previewPreset = presetObj.id;
+                root.asciiWallpaperRef.previewActive = true;
+            }
+            centerTimer.restart();
+        } else {
+            if (root.asciiWallpaperRef) {
+                root.asciiWallpaperRef.previewActive = false;
+                root.asciiWallpaperRef.asciiEnabled = false;
+            }
+            previewDebounceTimer.restart();
+            centerTimer.restart();
+        }
+    }
+
+    function toggleMode(): void {
+        switchMode(root.activeMode === "image" ? "ascii" : "image");
+    }
+
+    function selectAsciiIndex(idx: int, triggerPreview: bool): void {
+        var count = root.asciiPresets.length;
+        if (count <= 0) return;
+        var clamped = idx;
+        if (clamped < 0) clamped = count - 1;
+        if (clamped >= count) clamped = 0;
+
+        root.selectedAsciiIndex = clamped;
+        asciiFilmstripList.positionViewAtIndex(clamped, ListView.Center);
+        if (triggerPreview && root.asciiWallpaperRef) {
+            root.asciiWallpaperRef.previewPreset = root.asciiPresets[clamped].id;
+            root.asciiWallpaperRef.previewActive = true;
+        }
+    }
+
     function selectIndex(idx: int, triggerPreview: bool): void {
+        if (root.activeMode === "ascii") {
+            selectAsciiIndex(idx, triggerPreview);
+            return;
+        }
         var count = root.wallpapers ? root.wallpapers.length : 0;
         if (count <= 0) return;
         var clamped = idx;
@@ -215,15 +383,30 @@ PanelWindow {
         root.selectedIndex = clamped;
         filmstripList.positionViewAtIndex(clamped, ListView.Center);
         if (triggerPreview) {
+            if (root.asciiWallpaperRef) {
+                root.asciiWallpaperRef.previewActive = false;
+                root.asciiWallpaperRef.asciiEnabled = false;
+            }
             previewDebounceTimer.restart();
         }
     }
 
     function moveSelection(delta: int): void {
-        selectIndex(root.selectedIndex + delta, true);
+        if (root.activeMode === "ascii") {
+            selectAsciiIndex(root.selectedAsciiIndex + delta, true);
+        } else {
+            selectIndex(root.selectedIndex + delta, true);
+        }
     }
 
     function pickRandomPreview(): void {
+        if (root.activeMode === "ascii") {
+            var acount = root.asciiPresets.length;
+            if (acount <= 1) return;
+            var anext = (root.selectedAsciiIndex + 1 + Math.floor(Math.random() * (acount - 1))) % acount;
+            selectAsciiIndex(anext, true);
+            return;
+        }
         var count = root.wallpapers ? root.wallpapers.length : 0;
         if (count <= 1) return;
         var next = root.selectedIndex;
@@ -251,10 +434,37 @@ PanelWindow {
             root.closeInternal();
             return;
         }
+
+        if (root.activeMode === "ascii") {
+            var chosenPreset = root.currentSelectedObj.id;
+            root.originalAsciiEnabled = true;
+            root.originalAsciiPreset = chosenPreset;
+            if (root.asciiWallpaperRef) {
+                root.asciiWallpaperRef.activePreset = chosenPreset;
+                root.asciiWallpaperRef.asciiEnabled = true;
+                root.asciiWallpaperRef.previewActive = false;
+                if (chosenPreset === "wallpaper-ascii") {
+                    root.asciiWallpaperRef.reloadWallpaperSample();
+                }
+            }
+            applyAsciiProc.targetPreset = chosenPreset;
+            applyAsciiProc.running = false;
+            applyAsciiProc.running = true;
+            root.closeInternal();
+            return;
+        }
+
         var chosenPath = root.currentSelectedObj.path;
         var wasPreviewed = (root.previewedWallpaper === chosenPath);
         root.originalWallpaper = chosenPath;
         root.previewedWallpaper = chosenPath;
+        root.originalAsciiEnabled = false;
+
+        if (root.asciiWallpaperRef) {
+            root.asciiWallpaperRef.asciiEnabled = false;
+            root.asciiWallpaperRef.previewActive = false;
+            root.asciiWallpaperRef.reloadWallpaperSample();
+        }
 
         applyWallpaperProc.targetPath = chosenPath;
         applyWallpaperProc.alreadyPreviewed = wasPreviewed;
@@ -267,6 +477,12 @@ PanelWindow {
 
     function cancelAndClose(): void {
         previewDebounceTimer.stop();
+        // Restore ASCII state if changed during preview
+        if (root.asciiWallpaperRef) {
+            root.asciiWallpaperRef.previewActive = false;
+            root.asciiWallpaperRef.activePreset = root.originalAsciiPreset;
+            root.asciiWallpaperRef.asciiEnabled = root.originalAsciiEnabled;
+        }
         // Revert to original wallpaper if Live Preview changed it
         if (root.originalWallpaper !== "" && root.previewedWallpaper !== "" && root.previewedWallpaper !== root.originalWallpaper) {
             root.previewedWallpaper = root.originalWallpaper;
@@ -283,6 +499,17 @@ PanelWindow {
     function open(): void {
         if (!loadWallpapersProc.running) {
             loadWallpapersProc.running = true;
+        }
+        if (root.asciiWallpaperRef) {
+            root.originalAsciiEnabled = root.asciiWallpaperRef.asciiEnabled;
+            root.originalAsciiPreset = root.asciiWallpaperRef.activePreset;
+            root.activeMode = root.originalAsciiEnabled ? "ascii" : "image";
+            for (var i = 0; i < root.asciiPresets.length; i++) {
+                if (root.asciiPresets[i].id === root.originalAsciiPreset) {
+                    root.selectedAsciiIndex = i;
+                    break;
+                }
+            }
         }
         root.showWindow = true;
         root.isOpen = true;
@@ -338,11 +565,15 @@ PanelWindow {
             } else if (event.key === Qt.Key_Right || event.key === Qt.Key_L) {
                 root.moveSelection(1);
                 event.accepted = true;
+            } else if (event.key === Qt.Key_Tab) {
+                root.toggleMode();
+                event.accepted = true;
             } else if (event.key === Qt.Key_Home) {
                 root.selectIndex(0, true);
                 event.accepted = true;
             } else if (event.key === Qt.Key_End) {
-                root.selectIndex(Math.max(0, root.wallpapers.length - 1), true);
+                var maxLen = (root.activeMode === "ascii") ? root.asciiPresets.length : root.wallpapers.length;
+                root.selectIndex(Math.max(0, maxLen - 1), true);
                 event.accepted = true;
             } else if (event.key === Qt.Key_R) {
                 root.pickRandomPreview();
@@ -503,6 +734,68 @@ PanelWindow {
                             color: root.textPrimary
                         }
 
+                        // Dual-Mode Switcher Pill: [ IMAGE ] | [ ASCII LIVE ] (Tab to toggle)
+                        Rectangle {
+                            height: 24
+                            width: modeSwitchRow.implicitWidth + 8
+                            radius: 12
+                            color: Qt.rgba(0, 0, 0, 0.38)
+                            border.width: 1
+                            border.color: Qt.rgba(1, 1, 1, 0.14)
+
+                            RowLayout {
+                                id: modeSwitchRow
+                                anchors.centerIn: parent
+                                spacing: 2
+
+                                Rectangle {
+                                    height: 18
+                                    width: imgModeLbl.implicitWidth + 14
+                                    radius: 9
+                                    color: root.activeMode === "image" ? "#FFFFFF" : "transparent"
+
+                                    Text {
+                                        id: imgModeLbl
+                                        anchors.centerIn: parent
+                                        text: "IMAGE"
+                                        font.family: fontNMono.name
+                                        font.pixelSize: 9
+                                        font.bold: true
+                                        color: root.activeMode === "image" ? "#000000" : root.textSecondary
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.switchMode("image")
+                                    }
+                                }
+
+                                Rectangle {
+                                    height: 18
+                                    width: asciiModeLbl.implicitWidth + 14
+                                    radius: 9
+                                    color: root.activeMode === "ascii" ? root.nothingRed : "transparent"
+
+                                    Text {
+                                        id: asciiModeLbl
+                                        anchors.centerIn: parent
+                                        text: "⠿ ASCII LIVE"
+                                        font.family: fontNMono.name
+                                        font.pixelSize: 9
+                                        font.bold: true
+                                        color: root.activeMode === "ascii" ? "#FFFFFF" : root.textSecondary
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.switchMode("ascii")
+                                    }
+                                }
+                            }
+                        }
+
                         // Counter Pill [ 03 / 17 ]
                         Rectangle {
                             height: 22
@@ -516,8 +809,12 @@ PanelWindow {
                                 id: countLabel
                                 anchors.centerIn: parent
                                 text: {
-                                    var total = root.wallpapers ? root.wallpapers.length : 0;
-                                    var cur = total > 0 ? (root.selectedIndex + 1) : 0;
+                                    var total = (root.activeMode === "ascii")
+                                        ? root.asciiPresets.length
+                                        : (root.wallpapers ? root.wallpapers.length : 0);
+                                    var cur = total > 0
+                                        ? ((root.activeMode === "ascii" ? root.selectedAsciiIndex : root.selectedIndex) + 1)
+                                        : 0;
                                     var curStr = cur < 10 ? ("0" + cur) : ("" + cur);
                                     var totStr = total < 10 ? ("0" + total) : ("" + total);
                                     return curStr + " / " + totStr;
@@ -747,7 +1044,7 @@ PanelWindow {
 
                     // Empty State if no wallpapers found
                     Item {
-                        visible: !root.wallpapers || root.wallpapers.length === 0
+                        visible: root.activeMode === "image" && (!root.wallpapers || root.wallpapers.length === 0)
                         anchors.fill: parent
 
                         RowLayout {
@@ -799,9 +1096,180 @@ PanelWindow {
                         }
                     }
 
+                    // Horizontal ASCII Presets Filmstrip
+                    ListView {
+                        id: asciiFilmstripList
+                        visible: root.activeMode === "ascii"
+                        anchors.fill: parent
+                        orientation: ListView.Horizontal
+                        spacing: 14
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        highlightMoveDuration: 220
+                        model: root.asciiPresets
+
+                        Behavior on contentX {
+                            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                        }
+
+                        delegate: Item {
+                            id: asciiSlot
+                            width: 212
+                            height: asciiFilmstripList.height
+
+                            readonly property bool isSelected: (index === root.selectedAsciiIndex)
+                            readonly property bool isOriginalActive: (root.originalAsciiEnabled && modelData.id === root.originalAsciiPreset)
+
+                            Item {
+                                width: 198
+                                height: 112
+                                anchors.centerIn: parent
+
+                                scale: asciiSlot.isSelected ? 1.07 : (asciiCardMouse.containsMouse ? 1.02 : 0.95)
+                                opacity: asciiSlot.isSelected ? 1.0 : (asciiCardMouse.containsMouse ? 0.88 : 0.62)
+
+                                Behavior on scale { NumberAnimation { duration: 190; easing.type: Easing.OutBack } }
+                                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+
+                                RectangularGlow {
+                                    visible: asciiSlot.isSelected
+                                    anchors.fill: asciiCardBg
+                                    glowRadius: 14
+                                    spread: 0.2
+                                    color: Qt.rgba(0.843, 0.098, 0.129, 0.55)
+                                    cornerRadius: 18
+                                }
+
+                                Rectangle {
+                                    id: asciiCardBg
+                                    anchors.fill: parent
+                                    radius: 15
+                                    color: "#090A0D"
+                                    border.width: asciiSlot.isSelected ? 2.5 : 1
+                                    border.color: asciiSlot.isSelected
+                                        ? root.nothingRed
+                                        : (asciiCardMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.42) : Qt.rgba(1, 1, 1, 0.16))
+                                    clip: true
+
+                                    // Mini ASCII Art Pattern Preview inside Card
+                                    Column {
+                                        anchors.centerIn: parent
+                                        anchors.verticalCenterOffset: -6
+                                        spacing: 2
+
+                                        Repeater {
+                                            model: modelData.art
+                                            delegate: Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                text: modelData
+                                                font.family: fontNMono.name
+                                                font.pixelSize: 8
+                                                color: index === 2
+                                                    ? (asciiSlot.isSelected ? root.nothingRed : "#FFFFFF")
+                                                    : Qt.rgba(1, 1, 1, 0.48)
+                                            }
+                                        }
+                                    }
+
+                                    // Bottom Dark Gradient Scrim
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        height: 40
+                                        radius: 15
+                                        gradient: Gradient {
+                                            GradientStop { position: 0.0; color: "transparent" }
+                                            GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.90) }
+                                        }
+                                    }
+
+                                    // Top-left Badge: [ ACTIVE ] or Tag
+                                    Rectangle {
+                                        anchors.top: parent.top
+                                        anchors.left: parent.left
+                                        anchors.topMargin: 8
+                                        anchors.leftMargin: 8
+                                        height: 18
+                                        width: asciiTagText.implicitWidth + 12
+                                        radius: 9
+                                        color: asciiSlot.isOriginalActive ? root.nothingRed : Qt.rgba(1, 1, 1, 0.10)
+                                        border.width: 1
+                                        border.color: Qt.rgba(1, 1, 1, 0.22)
+
+                                        Text {
+                                            id: asciiTagText
+                                            anchors.centerIn: parent
+                                            text: asciiSlot.isOriginalActive ? "ACTIVE" : modelData.tag
+                                            font.family: fontNdot57.name
+                                            font.pixelSize: 8
+                                            font.letterSpacing: 0.8
+                                            color: "#FFFFFF"
+                                        }
+                                    }
+
+                                    // Top-right Index Number (#01)
+                                    Rectangle {
+                                        anchors.top: parent.top
+                                        anchors.right: parent.right
+                                        anchors.topMargin: 8
+                                        anchors.rightMargin: 8
+                                        height: 18
+                                        width: asciiIdxText.implicitWidth + 10
+                                        radius: 9
+                                        color: asciiSlot.isSelected ? root.nothingRed : Qt.rgba(0, 0, 0, 0.62)
+
+                                        Text {
+                                            id: asciiIdxText
+                                            anchors.centerIn: parent
+                                            text: "0" + (index + 1)
+                                            font.family: fontNMono.name
+                                            font.pixelSize: 9
+                                            font.weight: Font.Bold
+                                            color: "#FFFFFF"
+                                        }
+                                    }
+
+                                    // Bottom Title Caption
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        anchors.leftMargin: 10
+                                        anchors.rightMargin: 10
+                                        anchors.bottomMargin: 7
+                                        text: modelData.title
+                                        font.family: fontNMono.name
+                                        font.pixelSize: 10
+                                        color: asciiSlot.isSelected ? "#FFFFFF" : Qt.rgba(1, 1, 1, 0.82)
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: asciiCardMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (asciiSlot.isSelected) {
+                                            root.confirmSelection();
+                                        } else {
+                                            root.selectAsciiIndex(index, true);
+                                        }
+                                    }
+                                    onDoubleClicked: {
+                                        root.selectAsciiIndex(index, false);
+                                        root.confirmSelection();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     ListView {
                         id: filmstripList
-                        visible: root.wallpapers && root.wallpapers.length > 0
+                        visible: root.activeMode === "image" && root.wallpapers && root.wallpapers.length > 0
                         anchors.fill: parent
                         orientation: ListView.Horizontal
                         spacing: 14

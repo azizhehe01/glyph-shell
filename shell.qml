@@ -18,6 +18,13 @@ ShellRoot {
         id: desktopWidgets
     }
 
+    AsciiWallpaperWindow {
+        id: asciiWallpaper
+        rawCursorX: topNotch.cursorX
+        rawCursorY: topNotch.cursorY
+        hasOpenWindow: topNotch.hasWindow
+    }
+
     NotificationPopupWindow {
         id: notifPopup
         wallpaperUrl: desktopWidgets.wallpaperUrl
@@ -69,6 +76,7 @@ ShellRoot {
     WallpaperWindow {
         id: wallpaperSelector
         desktopWidgetsRef: desktopWidgets
+        asciiWallpaperRef: asciiWallpaper
     }
 
     ClipboardWindow {

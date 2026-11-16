@@ -31,6 +31,7 @@ LEGACY_ML4W_WP_DIR = os.path.expanduser("~/.config/ml4w/wallpapers")
 GLYPH_CACHE_DIR = os.path.expanduser("~/.cache/glyph-shell")
 THUMBS_DIR = os.path.join(GLYPH_CACHE_DIR, "thumbs")
 GLYPH_CURRENT_WP = os.path.join(GLYPH_CACHE_DIR, "current_wallpaper")
+ASCII_STATE_FILE = os.path.join(GLYPH_CACHE_DIR, "ascii_state.json")
 
 # Legacy compatibility paths so other tools/configs never break
 ML4W_CACHE_DIR = os.path.expanduser("~/.cache/ml4w/hyprland-dotfiles")
@@ -190,7 +191,76 @@ def collect_wallpapers():
         "folder": PRIMARY_WP_DIR,
         "count": len(items),
         "wallpapers": items,
+        "ascii": get_ascii_state(),
     }
+
+
+def get_ascii_state():
+    ensure_dirs_and_migrate()
+    default_state = {"enabled": False, "preset": "topo-wave"}
+    if os.path.exists(ASCII_STATE_FILE):
+        try:
+            with open(ASCII_STATE_FILE, "r") as f:
+                data = json.load(f)
+            return {
+                "enabled": bool(data.get("enabled", False)),
+                "preset": str(data.get("preset", "topo-wave")),
+            }
+        except Exception:
+            pass
+    return default_state
+
+
+def set_ascii_state(enabled: bool, preset: str = "topo-wave"):
+    ensure_dirs_and_migrate()
+    state = {"enabled": bool(enabled), "preset": str(preset or "topo-wave")}
+    try:
+        with open(ASCII_STATE_FILE, "w") as f:
+            json.dump(state, f)
+    except Exception:
+        pass
+    return state
+
+
+def sample_wallpaper_ascii(cols=76, rows=42):
+    """Samples the current wallpaper image into a color + luminance grid for Chameleon Image-to-ASCII."""
+    wp = get_current_wallpaper()
+    if not wp or not os.path.isfile(wp):
+        info = collect_wallpapers()
+        wps = info.get("wallpapers", [])
+        if wps:
+            wp = wps[0]["path"]
+    if not wp or not os.path.isfile(wp):
+        return {"cols": cols, "rows": rows, "cells": []}
+
+    try:
+        with Image.open(wp) as im:
+            im_rgb = im.convert("RGB")
+            w, h = im_rgb.size
+            target_ratio = cols / max(1, rows)
+            src_ratio = w / max(1, h)
+            if src_ratio > target_ratio:
+                new_w = int(h * target_ratio)
+                left = (w - new_w) // 2
+                im_crop = im_rgb.crop((left, 0, left + new_w, h))
+            else:
+                new_h = int(w / target_ratio)
+                top = (h - new_h) // 2
+                im_crop = im_rgb.crop((0, top, w, top + new_h))
+
+            small = im_crop.resize((cols, rows), Image.Resampling.BILINEAR)
+            pixels = list(small.getdata())
+            cells = []
+            for r, g, b in pixels:
+                lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+                # Boost saturation/brightness slightly for dark glass desktop contrast
+                mr = min(255, int(r * 1.15 + 18))
+                mg = min(255, int(g * 1.15 + 18))
+                mb = min(255, int(b * 1.15 + 18))
+                cells.append([round(lum, 3), f"#{mr:02x}{mg:02x}{mb:02x}"])
+            return {"cols": cols, "rows": rows, "path": wp, "cells": cells}
+    except Exception as e:
+        return {"cols": cols, "rows": rows, "cells": [], "error": str(e)}
 
 
 def ensure_awww_daemon():
@@ -363,10 +433,22 @@ def main():
             sys.exit(1)
         target = os.path.expanduser(sys.argv[2])
         skip_display = ("--already-previewed" in sys.argv)
+        set_ascii_state(False)
         if not skip_display:
             set_display_wallpaper(target, transition="wipe", duration="0.65", angle="30")
         update_blurred_and_ecosystem(target)
         print(json.dumps({"status": "applied", "path": target}))
+
+    elif cmd == "apply-ascii":
+        preset = sys.argv[2] if len(sys.argv) >= 3 else "topo-wave"
+        state = set_ascii_state(True, preset)
+        print(json.dumps({"status": "applied-ascii", "ascii": state}))
+
+    elif cmd == "ascii-state":
+        print(json.dumps(get_ascii_state()))
+
+    elif cmd == "sample-ascii":
+        print(json.dumps(sample_wallpaper_ascii()))
 
     elif cmd == "random":
         info = collect_wallpapers()
@@ -374,6 +456,7 @@ def main():
         if not wps:
             print(json.dumps({"status": "empty", "message": "No wallpapers found"}))
             sys.exit(0)
+        set_ascii_state(False)
         current = info.get("current", "")
         candidates = [w for w in wps if os.path.abspath(w["path"]) != os.path.abspath(current)]
         chosen = random.choice(candidates if candidates else wps)

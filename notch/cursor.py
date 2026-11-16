@@ -34,7 +34,6 @@ def find_sockets():
 active_class = "none"
 workspace_windows = 0
 lock = threading.Lock()
-sock_path_global = None
 
 
 def query_cmd(sock_path, cmd):
@@ -59,32 +58,40 @@ def refresh_workspace_state(sock_path):
     global active_class, workspace_windows
     if not sock_path:
         return
-    # Check active workspace windows
+
+    w_cnt = 0
     out_ws = query_cmd(sock_path, "j/activeworkspace")
     if out_ws and '"windows"' in out_ws:
         try:
             j = json.loads(out_ws)
             w_cnt = int(j.get("windows", 0))
-            with lock:
-                workspace_windows = w_cnt
         except Exception:
-            pass
+            w_cnt = 0
 
-    # Check active window class
+    # If the active workspace has 0 windows, guarantee active_class is "none"
+    if w_cnt <= 0:
+        with lock:
+            workspace_windows = 0
+            active_class = "none"
+        return
+
+    # Otherwise check active window class
+    cls_val = "none"
     out_win = query_cmd(sock_path, "j/activewindow")
     if out_win:
         try:
             j = json.loads(out_win)
-            cls = j.get("class", "none") or "none"
-            with lock:
-                active_class = cls if cls else "none"
+            c = j.get("class", "none") or "none"
+            cls_val = c if c else "none"
         except Exception:
-            with lock:
-                active_class = "none"
+            cls_val = "none"
+
+    with lock:
+        workspace_windows = w_cnt
+        active_class = cls_val
 
 
 def event_listener(sock2_path, sock_path):
-    global active_class, workspace_windows
     while True:
         try:
             if not sock2_path or not os.path.exists(sock2_path):
@@ -95,23 +102,21 @@ def event_listener(sock2_path, sock_path):
             f = s.makefile("r", encoding="utf-8", errors="ignore")
             for line in f:
                 line_str = line.strip()
-                if line_str.startswith("activewindow>>"):
-                    payload = line_str[len("activewindow>>"):].strip()
-                    parts = payload.split(",", 1)
-                    cls = parts[0].strip() if parts else ""
-                    with lock:
-                        active_class = cls if cls else "none"
-                elif any(
+                if any(
                     line_str.startswith(ev)
                     for ev in (
+                        "activewindow>>",
+                        "activewindowv2>>",
                         "openwindow>>",
                         "closewindow>>",
                         "workspace>>",
+                        "workspacev2>>",
                         "focusedmon>>",
                         "movewindow>>",
+                        "movewindowv2>>",
+                        "closelayer>>",
                     )
                 ):
-                    # Trigger a state refresh when windows/workspaces change
                     refresh_workspace_state(sock_path)
             s.close()
         except Exception:
@@ -119,7 +124,6 @@ def event_listener(sock2_path, sock_path):
 
 
 def main():
-    global active_class, workspace_windows
     sock_path, sock2_path = find_sockets()
 
     # Initial query
@@ -141,8 +145,8 @@ def main():
             time.sleep(0.5)
             continue
 
-        # Periodic refresh every 3 seconds as a safety heartbeat
-        if now - last_refresh_time > 3.0:
+        # Periodic refresh every 1.5 seconds as a safety heartbeat
+        if now - last_refresh_time > 1.5:
             refresh_workspace_state(sock_path)
             last_refresh_time = now
 
