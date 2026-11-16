@@ -195,12 +195,22 @@ def collect_wallpapers():
     }
 
 
+def sanitize_hex_color(val, fallback="#07080A"):
+    if not isinstance(val, str):
+        return fallback
+    s = val.strip()
+    if re.match(r"^#[0-9A-Fa-f]{6}$", s):
+        return s.upper()
+    return fallback
+
+
 def get_ascii_state():
     ensure_dirs_and_migrate()
     gpu_info = ensure_gpu_assets()
     default_state = {
         "enabled": False,
         "preset": "silent-blade",
+        "bg_color": "#07080A",
         "wallpaper": gpu_info.get("wallpaper", ""),
         "atlas": gpu_info.get("atlas", ""),
         "qsb": gpu_info.get("qsb", ""),
@@ -212,6 +222,7 @@ def get_ascii_state():
             return {
                 "enabled": bool(data.get("enabled", False)),
                 "preset": "silent-blade",
+                "bg_color": sanitize_hex_color(data.get("bg_color", "#07080A")),
                 "wallpaper": gpu_info.get("wallpaper", ""),
                 "atlas": gpu_info.get("atlas", ""),
                 "qsb": gpu_info.get("qsb", ""),
@@ -221,9 +232,16 @@ def get_ascii_state():
     return default_state
 
 
-def set_ascii_state(enabled: bool, preset: str = "silent-blade"):
+def set_ascii_state(enabled: bool, preset: str = "silent-blade", bg_color: str = None):
     ensure_dirs_and_migrate()
-    state = {"enabled": bool(enabled), "preset": "silent-blade"}
+    if bg_color is None and os.path.exists(ASCII_STATE_FILE):
+        try:
+            with open(ASCII_STATE_FILE, "r") as f:
+                bg_color = json.load(f).get("bg_color", "#07080A")
+        except Exception:
+            bg_color = "#07080A"
+    clean_bg = sanitize_hex_color(bg_color or "#07080A")
+    state = {"enabled": bool(enabled), "preset": "silent-blade", "bg_color": clean_bg}
     try:
         with open(ASCII_STATE_FILE, "w") as f:
             json.dump(state, f)
@@ -690,8 +708,9 @@ def main():
         print(json.dumps({"status": "applied", "path": target}))
 
     elif cmd == "apply-ascii":
-        preset = sys.argv[2] if len(sys.argv) >= 3 else "topo-wave"
-        state = set_ascii_state(True, preset)
+        preset = sys.argv[2] if len(sys.argv) >= 3 else "silent-blade"
+        bg_col = sys.argv[3] if len(sys.argv) >= 4 else None
+        state = set_ascii_state(True, preset, bg_col)
         print(json.dumps({"status": "applied-ascii", "ascii": state}))
 
     elif cmd == "ascii-state":

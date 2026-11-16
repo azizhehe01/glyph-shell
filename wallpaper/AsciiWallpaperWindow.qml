@@ -30,6 +30,8 @@ PanelWindow {
     property bool hasOpenWindow: false
     property string activePreset: "silent-blade"
     property string previewPreset: ""
+    property string activeBgColor: "#07080A"
+    property string previewBgColor: ""
 
     property bool initialized: false
     property bool shaderReady: false
@@ -39,12 +41,15 @@ PanelWindow {
     readonly property bool isShowing: root.asciiEnabled || root.previewActive
     readonly property string currentPreset: "silent-blade"
     readonly property int currentPresetId: 6
+    readonly property string currentBgColor: (root.previewActive && root.previewBgColor !== "")
+        ? root.previewBgColor
+        : root.activeBgColor
 
     // Auto-Pause when any window is open on the current workspace (unless previewing in Ctrl+Super+W)
     readonly property bool shouldAnimate: root.isShowing && (root.previewActive || !root.hasOpenWindow)
 
     visible: root.isShowing
-    color: "#07080A"
+    color: root.currentBgColor
 
     // Live cursor coordinates injected from NotchWindow — smoothed in native C++ scenegraph
     property real rawCursorX: 960
@@ -86,6 +91,7 @@ PanelWindow {
                         root.initialized = true;
                         root.asciiEnabled = !!d.enabled;
                         if (d.preset) root.activePreset = d.preset;
+                        if (d.bg_color) root.activeBgColor = d.bg_color;
                     }
                     if (d.atlas) root.atlasSource = "file://" + d.atlas;
                     if (d.wallpaper) root.wallpaperSource = "file://" + d.wallpaper;
@@ -150,6 +156,12 @@ PanelWindow {
         }
     }
 
+    onActiveBgColorChanged: {
+        if (root.asciiEnabled) {
+            lockSnapshotTimer.restart();
+        }
+    }
+
     onAsciiEnabledChanged: {
         if (root.asciiEnabled) {
             lockSnapshotTimer.restart();
@@ -198,6 +210,7 @@ PanelWindow {
             property real cursorY: root.smoothCursorY
             property real cursorEnergy: root.cursorEnergy
             property int presetId: root.currentPresetId
+            property color bgColor: root.currentBgColor
             property variant fontAtlas: fontAtlasImage
             property variant wallpaperTex: currentWallpaperImage
 

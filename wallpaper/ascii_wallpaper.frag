@@ -13,6 +13,7 @@ layout(std140, binding = 0) uniform buf {
     float cursorY;
     float cursorEnergy;
     int presetId;
+    vec4 bgColor;
 } ubuf;
 
 layout(binding = 1) uniform sampler2D fontAtlas;
@@ -152,9 +153,11 @@ void main() {
     vec2 cursorPx = vec2(ubuf.cursorX, ubuf.cursorY);
     float energy = ubuf.cursorEnergy;
 
-    vec3 bgCol = vec3(0.027, 0.031, 0.039);
-    vec3 dimCol = vec3(0.804, 0.839, 0.894);
-    vec3 brightCol = vec3(1.0, 1.0, 1.0);
+    vec3 bgCol = ubuf.bgColor.rgb;
+    float bgLum = dot(bgCol, vec3(0.299, 0.587, 0.114));
+    bool isLightBg = bgLum > 0.55;
+    vec3 dimCol = isLightBg ? vec3(0.22, 0.25, 0.30) : vec3(0.804, 0.839, 0.894);
+    vec3 brightCol = isLightBg ? vec3(0.05, 0.06, 0.08) : vec3(1.0, 1.0, 1.0);
     vec3 redCol = vec3(0.843, 0.098, 0.129);
 
     int glyphIdx = 0;

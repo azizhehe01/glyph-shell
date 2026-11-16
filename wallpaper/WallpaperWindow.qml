@@ -52,6 +52,12 @@ PanelWindow {
     property string activeMode: "image"
     property bool originalAsciiEnabled: false
     property string originalAsciiPreset: "silent-blade"
+    property string originalAsciiBgColor: "#07080A"
+    property string selectedAsciiBgColor: "#07080A"
+    property bool colorPickerOpen: false
+    property real hsvH: 0.61
+    property real hsvS: 0.30
+    property real hsvV: 0.04
     property int selectedAsciiIndex: 0
 
     readonly property var asciiPresets: [
@@ -83,9 +89,75 @@ PanelWindow {
 
     readonly property bool isPreviewingNew: {
         if (root.activeMode === "ascii") {
-            return !root.originalAsciiEnabled || (root.currentSelectedObj && root.currentSelectedObj.id !== root.originalAsciiPreset);
+            return !root.originalAsciiEnabled
+                || (root.currentSelectedObj && root.currentSelectedObj.id !== root.originalAsciiPreset)
+                || (root.selectedAsciiBgColor.toUpperCase() !== root.originalAsciiBgColor.toUpperCase());
         }
         return root.originalAsciiEnabled || (root.currentSelectedObj && root.originalWallpaper !== "" && root.currentSelectedObj.path !== root.originalWallpaper);
+    }
+
+    function hsvToHex(h: real, s: real, v: real): string {
+        var i = Math.floor(h * 6);
+        var f = h * 6 - i;
+        var p = v * (1 - s);
+        var q = v * (1 - f * s);
+        var t = v * (1 - (1 - f) * s);
+        var r = 0, g = 0, b = 0;
+        switch (i % 6) {
+            case 0: r = v; g = t; b = p; break;
+            case 1: r = q; g = v; b = p; break;
+            case 2: r = p; g = v; b = t; break;
+            case 3: r = p; g = q; b = v; break;
+            case 4: r = t; g = p; b = v; break;
+            case 5: r = v; g = p; b = q; break;
+        }
+        function toH(c) {
+            var val = Math.max(0, Math.min(255, Math.round(c * 255)));
+            var s2 = val.toString(16).toUpperCase();
+            return s2.length < 2 ? "0" + s2 : s2;
+        }
+        return "#" + toH(r) + toH(g) + toH(b);
+    }
+
+    function syncHsvFromHex(hexStr: string): void {
+        if (!/^#[0-9A-Fa-f]{6}$/.test(hexStr)) return;
+        var r = parseInt(hexStr.substr(1, 2), 16) / 255.0;
+        var g = parseInt(hexStr.substr(3, 2), 16) / 255.0;
+        var b = parseInt(hexStr.substr(5, 2), 16) / 255.0;
+        var max = Math.max(r, g, b);
+        var min = Math.min(r, g, b);
+        var d = max - min;
+        var h = root.hsvH;
+        var s = (max === 0) ? 0 : d / max;
+        var v = max;
+        if (d !== 0) {
+            if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+            else if (max === g) h = ((b - r) / d + 2) / 6;
+            else h = ((r - g) / d + 4) / 6;
+        }
+        root.hsvH = Math.max(0, Math.min(1, h));
+        root.hsvS = Math.max(0, Math.min(1, s));
+        root.hsvV = Math.max(0, Math.min(1, v));
+    }
+
+    function applyHsvPreview(): void {
+        var hex = hsvToHex(root.hsvH, root.hsvS, root.hsvV);
+        root.selectedAsciiBgColor = hex;
+        if (root.asciiWallpaperRef) {
+            root.asciiWallpaperRef.previewBgColor = hex;
+            root.asciiWallpaperRef.previewActive = true;
+        }
+    }
+
+    function applyHexPreview(hexStr: string): void {
+        var clean = hexStr.trim().toUpperCase();
+        if (!/^#[0-9A-F]{6}$/.test(clean)) return;
+        root.selectedAsciiBgColor = clean;
+        syncHsvFromHex(clean);
+        if (root.asciiWallpaperRef) {
+            root.asciiWallpaperRef.previewBgColor = clean;
+            root.asciiWallpaperRef.previewActive = true;
+        }
     }
 
     // Official Nothing OS Typography
@@ -191,6 +263,11 @@ PanelWindow {
                     root.selectedIndex = activeIdx;
                     if (data.ascii) {
                         root.originalAsciiEnabled = !!data.ascii.enabled;
+                        if (data.ascii.bg_color) {
+                            root.originalAsciiBgColor = data.ascii.bg_color;
+                            root.selectedAsciiBgColor = data.ascii.bg_color;
+                            root.syncHsvFromHex(data.ascii.bg_color);
+                        }
                         if (data.ascii.preset) {
                             root.originalAsciiPreset = data.ascii.preset;
                             for (var j = 0; j < root.asciiPresets.length; j++) {
@@ -225,8 +302,9 @@ PanelWindow {
     // Process to commit ASCII preset state
     Process {
         id: applyAsciiProc
-        property string targetPreset: "topo-wave"
-        command: ["python3", Quickshell.shellDir + "/wallpaper/wallpaper.py", "apply-ascii", targetPreset]
+        property string targetPreset: "silent-blade"
+        property string targetBgColor: "#07080A"
+        command: ["python3", Quickshell.shellDir + "/wallpaper/wallpaper.py", "apply-ascii", targetPreset, targetBgColor]
         running: false
     }
 
@@ -271,12 +349,15 @@ PanelWindow {
             var presetObj = root.asciiPresets[root.selectedAsciiIndex];
             if (root.asciiWallpaperRef && presetObj) {
                 root.asciiWallpaperRef.previewPreset = presetObj.id;
+                root.asciiWallpaperRef.previewBgColor = root.selectedAsciiBgColor;
                 root.asciiWallpaperRef.previewActive = true;
             }
             centerTimer.restart();
         } else {
+            root.colorPickerOpen = false;
             if (root.asciiWallpaperRef) {
                 root.asciiWallpaperRef.previewActive = false;
+                root.asciiWallpaperRef.previewBgColor = "";
                 root.asciiWallpaperRef.asciiEnabled = false;
             }
             previewDebounceTimer.restart();
@@ -372,17 +453,20 @@ PanelWindow {
 
         if (root.activeMode === "ascii") {
             var chosenPreset = root.currentSelectedObj.id;
+            var chosenBg = root.selectedAsciiBgColor;
+            root.colorPickerOpen = false;
             root.originalAsciiEnabled = true;
             root.originalAsciiPreset = chosenPreset;
+            root.originalAsciiBgColor = chosenBg;
             if (root.asciiWallpaperRef) {
                 root.asciiWallpaperRef.activePreset = chosenPreset;
+                root.asciiWallpaperRef.activeBgColor = chosenBg;
+                root.asciiWallpaperRef.previewBgColor = "";
                 root.asciiWallpaperRef.asciiEnabled = true;
                 root.asciiWallpaperRef.previewActive = false;
-                if (chosenPreset === "wallpaper-ascii") {
-                    root.asciiWallpaperRef.reloadWallpaperSample();
-                }
             }
             applyAsciiProc.targetPreset = chosenPreset;
+            applyAsciiProc.targetBgColor = chosenBg;
             applyAsciiProc.running = false;
             applyAsciiProc.running = true;
             root.closeInternal();
@@ -412,10 +496,15 @@ PanelWindow {
 
     function cancelAndClose(): void {
         previewDebounceTimer.stop();
+        root.colorPickerOpen = false;
+        root.selectedAsciiBgColor = root.originalAsciiBgColor;
+        root.syncHsvFromHex(root.originalAsciiBgColor);
         // Restore ASCII state if changed during preview
         if (root.asciiWallpaperRef) {
             root.asciiWallpaperRef.previewActive = false;
+            root.asciiWallpaperRef.previewBgColor = "";
             root.asciiWallpaperRef.activePreset = root.originalAsciiPreset;
+            root.asciiWallpaperRef.activeBgColor = root.originalAsciiBgColor;
             root.asciiWallpaperRef.asciiEnabled = root.originalAsciiEnabled;
         }
         // Revert to original wallpaper if Live Preview changed it
@@ -536,6 +625,239 @@ PanelWindow {
         sequence: "Ctrl+Meta+W"
         enabled: root.isOpen
         onActivated: root.cancelAndClose()
+    }
+
+    // =========================================================================
+    // HSV Background Color Picker Popover (ASCII Mode)
+    // =========================================================================
+    Rectangle {
+        id: hsvPopover
+        visible: root.isOpen && root.activeMode === "ascii" && root.colorPickerOpen
+        width: 264
+        height: 268
+        radius: 16
+        anchors.bottom: dockWrapper.top
+        anchors.bottomMargin: 12
+        anchors.right: dockWrapper.right
+        color: Qt.rgba(0.06, 0.07, 0.09, 0.92)
+        border.width: 1
+        border.color: Qt.rgba(1, 1, 1, 0.18)
+        z: 50
+
+        // Absorb clicks inside popover so backdrop doesn't close the drawer
+        MouseArea { anchors.fill: parent }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 10
+
+            // 1. 2D Saturation x Value Gradient Box
+            Item {
+                id: svBox
+                Layout.fillWidth: true
+                Layout.preferredHeight: 156
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 10
+                    color: Qt.hsva(root.hsvH, 1.0, 1.0, 1.0)
+                    clip: true
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 10
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#FFFFFFFF" }
+                            GradientStop { position: 1.0; color: "#00FFFFFF" }
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 10
+                        gradient: Gradient {
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: "#00000000" }
+                            GradientStop { position: 1.0; color: "#FF000000" }
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 10
+                        color: "transparent"
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.16)
+                    }
+
+                    // Draggable circle indicator
+                    Rectangle {
+                        width: 14
+                        height: 14
+                        radius: 7
+                        x: Math.max(0, Math.min(svBox.width - width, root.hsvS * svBox.width - width / 2))
+                        y: Math.max(0, Math.min(svBox.height - height, (1.0 - root.hsvV) * svBox.height - height / 2))
+                        color: "transparent"
+                        border.width: 2
+                        border.color: "#FFFFFF"
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -1
+                            radius: 8
+                            color: "transparent"
+                            border.width: 1
+                            border.color: Qt.rgba(0, 0, 0, 0.55)
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.CrossCursor
+                        function updateSV(mx, my) {
+                            root.hsvS = Math.max(0.0, Math.min(1.0, mx / svBox.width));
+                            root.hsvV = Math.max(0.0, Math.min(1.0, 1.0 - (my / svBox.height)));
+                            root.applyHsvPreview();
+                        }
+                        onPressed: (mouse) => updateSV(mouse.x, mouse.y)
+                        onPositionChanged: (mouse) => { if (pressed) updateSV(mouse.x, mouse.y); }
+                    }
+                }
+            }
+
+            // 2. Preview Swatch + Rainbow Hue Slider
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                Rectangle {
+                    width: 28
+                    height: 28
+                    radius: 8
+                    color: root.selectedAsciiBgColor
+                    border.width: 1
+                    border.color: Qt.rgba(1, 1, 1, 0.25)
+                }
+
+                Item {
+                    id: hueTrack
+                    Layout.fillWidth: true
+                    height: 16
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        height: 12
+                        radius: 6
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.00; color: "#FF0000" }
+                            GradientStop { position: 0.17; color: "#FFFF00" }
+                            GradientStop { position: 0.33; color: "#00FF00" }
+                            GradientStop { position: 0.50; color: "#00FFFF" }
+                            GradientStop { position: 0.67; color: "#0000FF" }
+                            GradientStop { position: 0.83; color: "#FF00FF" }
+                            GradientStop { position: 1.00; color: "#FF0000" }
+                        }
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.18)
+                    }
+
+                    Rectangle {
+                        width: 16
+                        height: 16
+                        radius: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: Math.max(0, Math.min(hueTrack.width - width, root.hsvH * hueTrack.width - width / 2))
+                        color: Qt.hsva(root.hsvH, 1.0, 1.0, 1.0)
+                        border.width: 2
+                        border.color: "#FFFFFF"
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        function updateHue(mx) {
+                            root.hsvH = Math.max(0.0, Math.min(1.0, mx / hueTrack.width));
+                            root.applyHsvPreview();
+                        }
+                        onPressed: (mouse) => updateHue(mouse.x)
+                        onPositionChanged: (mouse) => { if (pressed) updateHue(mouse.x); }
+                    }
+                }
+            }
+
+            // 3. Editable #HEX Input + Reset Obsidian Button
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 28
+                    radius: 8
+                    color: Qt.rgba(1, 1, 1, 0.07)
+                    border.width: 1
+                    border.color: hexInput.activeFocus ? root.nothingRed : Qt.rgba(1, 1, 1, 0.14)
+
+                    TextInput {
+                        id: hexInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 10
+                        verticalAlignment: TextInput.AlignVCenter
+                        font.family: fontNMono.name
+                        font.pixelSize: 11
+                        color: root.textPrimary
+                        text: root.selectedAsciiBgColor
+                        maximumLength: 7
+                        selectByMouse: true
+                        onTextEdited: {
+                            if (/^#[0-9A-Fa-f]{6}$/.test(text)) {
+                                root.applyHexPreview(text);
+                            }
+                        }
+                        Keys.onReturnPressed: {
+                            root.applyHexPreview(text);
+                            keyCatcher.forceActiveFocus();
+                        }
+                        Keys.onEscapePressed: {
+                            keyCatcher.forceActiveFocus();
+                            root.colorPickerOpen = false;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 28
+                    width: resetColLbl.implicitWidth + 18
+                    radius: 8
+                    color: resetColMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.15) : Qt.rgba(1, 1, 1, 0.07)
+                    border.width: 1
+                    border.color: Qt.rgba(1, 1, 1, 0.14)
+
+                    Text {
+                        id: resetColLbl
+                        anchors.centerIn: parent
+                        text: "RESET"
+                        font.family: fontNMono.name
+                        font.pixelSize: 10
+                        font.bold: true
+                        color: root.textSecondary
+                    }
+
+                    MouseArea {
+                        id: resetColMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.applyHexPreview("#07080A")
+                    }
+                }
+            }
+        }
     }
 
     // =========================================================================
@@ -823,6 +1145,49 @@ PanelWindow {
                     // Right: Interactive Action Pills & Key Hints
                     RowLayout {
                         spacing: 6
+
+                        // BG COLOR Picker Toggle (ASCII Mode)
+                        Rectangle {
+                            visible: root.activeMode === "ascii"
+                            height: 26
+                            width: bgColRow.implicitWidth + 16
+                            radius: 13
+                            color: root.colorPickerOpen
+                                ? Qt.rgba(0.84, 0.10, 0.13, 0.25)
+                                : (bgColMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.15) : Qt.rgba(1, 1, 1, 0.08))
+                            border.width: 1
+                            border.color: root.colorPickerOpen ? root.nothingRed : Qt.rgba(1, 1, 1, 0.16)
+
+                            RowLayout {
+                                id: bgColRow
+                                anchors.centerIn: parent
+                                spacing: 6
+
+                                Rectangle {
+                                    width: 12
+                                    height: 12
+                                    radius: 4
+                                    color: root.selectedAsciiBgColor
+                                    border.width: 1
+                                    border.color: Qt.rgba(1, 1, 1, 0.45)
+                                }
+                                Text {
+                                    text: "BG " + root.selectedAsciiBgColor
+                                    font.family: fontNMono.name
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    color: root.textPrimary
+                                }
+                            }
+
+                            MouseArea {
+                                id: bgColMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.colorPickerOpen = !root.colorPickerOpen
+                            }
+                        }
 
                         // [R] RANDOM Button
                         Rectangle {
