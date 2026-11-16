@@ -245,7 +245,11 @@ void main() {
         vec3 wpSample = texture(wallpaperTex, cellCenterUV).rgb;
         float rawLum = dot(wpSample, vec3(0.299, 0.587, 0.114));
         // Auto-contrast stretch so dark wallpapers still show rich * # % @ detail
-        float baseLum = smoothstep(0.03, 0.68, rawLum);
+        float baseLum = smoothstep(0.02, 0.65, rawLum);
+        // Boost color saturation so green/blue/gold hues stay vivid instead of washed-out white
+        vec3 satWp = mix(vec3(rawLum), wpSample, 1.65);
+        vec3 vividWp = clamp(satWp * (1.35 + baseLum * 0.65), 0.0, 1.0);
+
         float iDist = length(cellCenterPx - cursorPx);
         float cWave = (iDist < 260.0)
             ? sin(iDist * 0.05 - t * 6.0) * (1.0 - iDist / 260.0) * 0.38
@@ -255,16 +259,15 @@ void main() {
         int idx6 = int(floor(lum * 10.0));
         if (idx6 > 0) {
             glyphIdx = idx6;
-            vec3 boostedWp = clamp(wpSample * 1.65 + 0.12, 0.0, 1.0);
-            if (iDist < 180.0 && idx6 >= 6) {
+            if (iDist < 170.0 && idx6 >= 6) {
                 charColor = redCol;
                 charAlpha = 0.96;
-            } else if (idx6 >= 5 || iDist < 240.0) {
-                charColor = mix(brightCol, boostedWp, 0.35);
-                charAlpha = 0.92;
+            } else if (idx6 >= 5 || iDist < 220.0) {
+                charColor = mix(brightCol, vividWp, 0.85);
+                charAlpha = 0.95;
             } else {
-                charColor = mix(dimCol, boostedWp, 0.45);
-                charAlpha = 0.55;
+                charColor = mix(dimCol, vividWp, 0.88);
+                charAlpha = 0.72;
             }
         }
     }

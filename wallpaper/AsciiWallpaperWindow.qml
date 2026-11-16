@@ -31,6 +31,7 @@ PanelWindow {
     property string activePreset: "topo-wave"
     property string previewPreset: ""
 
+    property bool initialized: false
     property bool shaderReady: false
     property string atlasSource: ""
     property string wallpaperSource: ""
@@ -93,8 +94,11 @@ PanelWindow {
             onStreamFinished: {
                 try {
                     var d = JSON.parse(this.text.trim());
-                    root.asciiEnabled = !!d.enabled;
-                    if (d.preset) root.activePreset = d.preset;
+                    if (!root.initialized) {
+                        root.initialized = true;
+                        root.asciiEnabled = !!d.enabled;
+                        if (d.preset) root.activePreset = d.preset;
+                    }
                     if (d.atlas) root.atlasSource = "file://" + d.atlas;
                     if (d.wallpaper) root.wallpaperSource = "file://" + d.wallpaper;
                     if (d.qsb) {
@@ -134,6 +138,21 @@ PanelWindow {
             if (root.asciiEnabled) {
                 root.snapshotToLockscreen();
             }
+        }
+    }
+
+    onCurrentPresetChanged: {
+        if (root.currentPreset === "wallpaper-ascii") {
+            root.reloadWallpaperSample();
+        }
+        if (root.asciiEnabled) {
+            lockSnapshotTimer.restart();
+        }
+    }
+
+    onIsShowingChanged: {
+        if (root.isShowing && root.currentPreset === "wallpaper-ascii") {
+            root.reloadWallpaperSample();
         }
     }
 
