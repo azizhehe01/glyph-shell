@@ -51,99 +51,21 @@ PanelWindow {
     // Dual-Mode: "image" vs "ascii"
     property string activeMode: "image"
     property bool originalAsciiEnabled: false
-    property string originalAsciiPreset: "topo-wave"
+    property string originalAsciiPreset: "silent-blade"
     property int selectedAsciiIndex: 0
 
     readonly property var asciiPresets: [
         {
-            id: "topo-wave",
-            title: "TOPOGRAPHIC WAVE",
-            res: "INTERACTIVE · RIPPLE",
-            tag: "CONTOUR",
-            art: [
-                " · . : - = + * # % @ % # * + = - : . · ",
-                " . : - = + * # @ # * + = - : . · . : - ",
-                " : - = + * % @ @ % * + = - : . · . : - =",
-                " - = + * # @ % * + = - : . · . : - = + *",
-                " = + * # % * + = - : . · . : - = + * # %"
-            ]
-        },
-        {
-            id: "glyph-vortex",
-            title: "NOTHING GLYPH VORTEX",
-            res: "INTERACTIVE · ORBIT",
-            tag: "GLYPH",
-            art: [
-                "      · • ○ ◎ ● ╬ ● ◎ ○ • ·      ",
-                "   • ○ ◎ ● ╬ ╋ ▓ ╋ ╬ ● ◎ ○ •   ",
-                " ○ ◎ ● ╬ ╋ ▓ █ ● █ ▓ ╋ ╬ ● ◎ ○ ",
-                "   • ○ ◎ ● ╬ ╋ ▓ ╋ ╬ ● ◎ ○ •   ",
-                "      · • ○ ◎ ● ╬ ● ◎ ○ • ·      "
-            ]
-        },
-        {
-            id: "cyber-rain",
-            title: "TERMINAL GLYPH RAIN",
-            res: "INTERACTIVE · REPEL",
-            tag: "MATRIX",
-            art: [
-                " 0  F  ∷  A  ⋮  7  +  C  ∶  9  #  E ",
-                " 1  A  ∶  B  ⋯  4  *  D  ∷  2  +  F ",
-                " 8  C  ⋮  0  +  9  #  A  ⋮  5  *  0 ",
-                " 4  E  ⋯  F  *  2  ∷  1  ⋯  C  #  7 ",
-                " F  0  +  3  #  B  ∶  8  +  E  ∷  1 "
-            ]
-        },
-        {
-            id: "ascii-torus",
-            title: "3D ASCII TORUS",
-            res: "INTERACTIVE · 3D TILT",
-            tag: "3D DONUT",
-            art: [
-                "        . , - ~ : ; = ! * #        ",
-                "    , - ~ : ; = ! * # $ @ $ # *    ",
-                "  - ~ : = ! * # @ . . @ # * ! = :  ",
-                "    , - ~ : ; = ! * # $ @ $ # *    ",
-                "        . , - ~ : ; = ! * #        "
-            ]
-        },
-        {
-            id: "halftone-pulse",
-            title: "HALFTONE MOIRÉ CRT",
-            res: "INTERACTIVE · MOIRÉ",
-            tag: "RETRO CRT",
-            art: [
-                " · ∘ ○ ◌ ◍ ◎ ● █ ● ◎ ◍ ◌ ○ ∘ · ",
-                " ∘ ○ ◌ ◍ ◎ ● █ ◎ █ ● ◎ ◍ ◌ ○ ∘ ",
-                " ○ ◌ ◍ ◎ ● █ ◎ · ◎ █ ● ◎ ◍ ◌ ○ ",
-                " ∘ ○ ◌ ◍ ◎ ● █ ◎ █ ● ◎ ◍ ◌ ○ ∘ ",
-                " · ∘ ○ ◌ ◍ ◎ ● █ ● ◎ ◍ ◌ ○ ∘ · "
-            ]
-        },
-        {
-            id: "wallpaper-ascii",
-            title: "WALLPAPER TO ASCII",
-            res: "CHAMELEON · PHOTO",
-            tag: "LIVE PHOTO",
-            art: [
-                " ░ ▒ ▓ █ ▓ ▒ ░ · . : - = + * # % ",
-                " ▒ ▓ █ @ █ ▓ ▒ ░ · : = + * # % @ ",
-                " ▓ █ @ # @ █ ▓ ▒ · - + * # % @ █ ",
-                " ▒ ▓ █ @ █ ▓ ▒ ░ · : = + * # % @ ",
-                " ░ ▒ ▓ █ ▓ ▒ ░ · . : - = + * # % "
-            ]
-        },
-        {
             id: "silent-blade",
             title: "SILENT BLADE",
-            res: "MINIMAL · 3D SWORD",
+            res: "480×270 · SHADE BLOCKS",
             tag: "MINIMALIST",
             art: [
-                "                /\\                ",
-                "                ||                ",
-                "                ||                ",
-                "            ====♦====             ",
-                "                ||                "
+                "                ▓▓                ",
+                "               ▒██▓               ",
+                "               ▒██▓               ",
+                "           ░░░░♦♦♦♦░░░░           ",
+                "                ▒▒                "
             ]
         }
     ]

@@ -200,7 +200,7 @@ def get_ascii_state():
     gpu_info = ensure_gpu_assets()
     default_state = {
         "enabled": False,
-        "preset": "topo-wave",
+        "preset": "silent-blade",
         "wallpaper": gpu_info.get("wallpaper", ""),
         "atlas": gpu_info.get("atlas", ""),
         "qsb": gpu_info.get("qsb", ""),
@@ -211,7 +211,7 @@ def get_ascii_state():
                 data = json.load(f)
             return {
                 "enabled": bool(data.get("enabled", False)),
-                "preset": str(data.get("preset", "topo-wave")),
+                "preset": "silent-blade",
                 "wallpaper": gpu_info.get("wallpaper", ""),
                 "atlas": gpu_info.get("atlas", ""),
                 "qsb": gpu_info.get("qsb", ""),
@@ -221,9 +221,9 @@ def get_ascii_state():
     return default_state
 
 
-def set_ascii_state(enabled: bool, preset: str = "topo-wave"):
+def set_ascii_state(enabled: bool, preset: str = "silent-blade"):
     ensure_dirs_and_migrate()
-    state = {"enabled": bool(enabled), "preset": str(preset or "topo-wave")}
+    state = {"enabled": bool(enabled), "preset": "silent-blade"}
     try:
         with open(ASCII_STATE_FILE, "w") as f:
             json.dump(state, f)

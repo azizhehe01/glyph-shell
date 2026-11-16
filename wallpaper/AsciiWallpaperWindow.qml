@@ -28,7 +28,7 @@ PanelWindow {
     property bool asciiEnabled: false
     property bool previewActive: false
     property bool hasOpenWindow: false
-    property string activePreset: "topo-wave"
+    property string activePreset: "silent-blade"
     property string previewPreset: ""
 
     property bool initialized: false
@@ -37,21 +37,8 @@ PanelWindow {
     property string wallpaperSource: ""
 
     readonly property bool isShowing: root.asciiEnabled || root.previewActive
-    readonly property string currentPreset: (root.previewActive && root.previewPreset !== "")
-        ? root.previewPreset
-        : root.activePreset
-
-    readonly property int currentPresetId: {
-        var p = root.currentPreset;
-        if (p === "topo-wave") return 0;
-        if (p === "glyph-vortex") return 1;
-        if (p === "cyber-rain") return 2;
-        if (p === "ascii-torus") return 3;
-        if (p === "halftone-pulse") return 4;
-        if (p === "wallpaper-ascii") return 5;
-        if (p === "silent-blade") return 6;
-        return 0;
-    }
+    readonly property string currentPreset: "silent-blade"
+    readonly property int currentPresetId: 6
 
     // Auto-Pause when any window is open on the current workspace (unless previewing in Ctrl+Super+W)
     readonly property bool shouldAnimate: root.isShowing && (root.previewActive || !root.hasOpenWindow)
