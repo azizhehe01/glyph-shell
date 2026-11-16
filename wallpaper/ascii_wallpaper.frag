@@ -68,6 +68,75 @@ float sdTorus(vec3 p, vec2 t) {
     return length(q) - t.y;
 }
 
+float sdBox(vec3 p, vec3 b) {
+    vec3 q = abs(p) - b;
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+    vec3 pa = p - a, ba = b - a;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - r;
+}
+
+// Returns vec2(distance, materialId: 1=blade, 2=guard/pommel, 3=red gem/core)
+vec2 sdSword(vec3 p) {
+    // 1. Heroic Tapered Diamond-Profile Blade (y from -0.34 to +1.28)
+    float by = clamp((p.y + 0.34) / 1.62, 0.0, 1.0);
+    float halfW = mix(0.22, 0.012, pow(by, 1.45));
+    float halfT = mix(0.085, 0.010, by);
+    float bladeDiamond = (abs(p.x) / halfW + abs(p.z) / halfT - 1.0) * min(halfW, halfT) * 0.72;
+    float bladeCapY = max(p.y - 1.28, -0.34 - p.y);
+    float dBlade = max(bladeDiamond, bladeCapY);
+
+    // 2. Sculpted Crossguard (tapered & slightly swept)
+    vec3 gp = p - vec3(0.0, -0.37, 0.0);
+    float guardSweep = abs(gp.x) * 0.14;
+    float dGuard = sdBox(vec3(gp.x, gp.y - guardSweep, gp.z), vec3(0.54, 0.058, 0.095)) - 0.015;
+
+    // 3. Hilt / Grip
+    float dGrip = sdCapsule(p, vec3(0.0, -0.40, 0.0), vec3(0.0, -0.94, 0.0), 0.068);
+
+    // 4. Faceted Pommel
+    float dPommel = length(p - vec3(0.0, -1.03, 0.0)) - 0.125;
+
+    // 5. Nothing Red Core Gem at Crossguard Center
+    float dGem = length((p - vec3(0.0, -0.37, 0.0)) * vec3(1.0, 1.0, 0.72)) - 0.095;
+
+    vec2 res = vec2(dBlade, 1.0);
+    float dMetal = min(dGuard, dPommel);
+    if (dMetal < res.x) res = vec2(dMetal, 2.0);
+    if (dGrip < res.x) res = vec2(dGrip, 2.0);
+    if (dGem < res.x) res = vec2(dGem, 3.0);
+    return res;
+}
+
+// Crisp Edge-to-Edge GPU Shade Block mask: 1='░', 2='▒', 3='▓', 4='█'
+float sampleShadeBlock(int level, vec2 cellUV) {
+    if (level <= 0) return 0.0;
+    if (level >= 4) return 1.0; // █ Full Block
+    vec2 sub = floor(cellUV * 2.0);
+    float checker = mod(sub.x + sub.y, 2.0);
+    if (level == 2) return (checker < 0.5) ? 1.0 : 0.0; // ▒ Medium Shade (50%)
+    if (level == 1) return (sub.x < 0.5 && sub.y < 0.5) ? 1.0 : 0.0; // ░ Light Shade (25%)
+    return (sub.x > 0.5 && sub.y > 0.5) ? 0.0 : 1.0; // ▓ Dark Shade (75%)
+}
+
+vec3 transformSword(vec3 p, float cosY, float sinY, float cosP, float sinP, float hoverY) {
+    p.y -= hoverY;
+    vec3 px = vec3(p.x, p.y * cosP - p.z * sinP, p.y * sinP + p.z * cosP);
+    return vec3(px.x * cosY + px.z * sinY, px.y, -px.x * sinY + px.z * cosY);
+}
+
+vec3 calcSwordNormal(vec3 p) {
+    const float e = 0.004;
+    return normalize(vec3(
+        sdSword(p + vec3(e, 0.0, 0.0)).x - sdSword(p - vec3(e, 0.0, 0.0)).x,
+        sdSword(p + vec3(0.0, e, 0.0)).x - sdSword(p - vec3(0.0, e, 0.0)).x,
+        sdSword(p + vec3(0.0, 0.0, e)).x - sdSword(p - vec3(0.0, 0.0, e)).x
+    ));
+}
+
 void main() {
     vec2 res = vec2(max(1.0, ubuf.widthPx), max(1.0, ubuf.heightPx));
     float aspect = res.x / res.y;
@@ -241,12 +310,81 @@ void main() {
                 charAlpha = 0.42;
             }
         }
+    } else if (ubuf.presetId == 6) {
+        // PRESET 6: SILENT BLADE (Ultra-Dense 480x270 Edge-to-Edge Shade-Block 3D Sword)
+        vec2 swordGrid = vec2(480.0, 270.0);
+        vec2 sGridPos = qt_TexCoord0 * swordGrid;
+        vec2 sCellIdx = floor(sGridPos);
+        vec2 sCellUV = fract(sGridPos);
+        vec2 sCenterUV = (sCellIdx + 0.5) / swordGrid;
+
+        vec2 p2d = vec2((sCenterUV.x - 0.56) * aspect, -(sCenterUV.y - 0.50)) * 2.05;
+        vec3 ro = vec3(0.0, 0.08, -3.30);
+        vec3 rd = normalize(vec3(p2d, 1.55));
+
+        float hoverY = sin(t * 1.15) * 0.050;
+        float yaw = t * 0.65 + ((cursorPx.x / res.x) - 0.5) * 1.8;
+        float pitch = -0.16 + ((cursorPx.y / res.y) - 0.5) * 0.65;
+        float cosY = cos(yaw), sinY = sin(yaw);
+        float cosP = cos(pitch), sinP = sin(pitch);
+
+        float distS = 0.0;
+        bool hitS = false;
+        vec3 hitPos = vec3(0.0);
+        float hitMat = 1.0;
+
+        for (int i = 0; i < 40; i++) {
+            vec3 sp = transformSword(ro + rd * distS, cosY, sinY, cosP, sinP, hoverY);
+            vec2 resS = sdSword(sp);
+            if (resS.x < 0.004) {
+                hitS = true;
+                hitPos = sp;
+                hitMat = resS.y;
+                break;
+            }
+            distS += resS.x * 0.75;
+            if (distS > 6.5) break;
+        }
+
+        if (hitS) {
+            vec3 nrm = calcSwordNormal(hitPos);
+            vec3 lightWorld = normalize(vec3(0.70, 0.55, -0.75));
+            vec3 lightLocal = transformSword(lightWorld, cosY, sinY, cosP, sinP, 0.0);
+            vec3 viewLocal = transformSword(normalize(vec3(0.0, 0.0, -1.0)), cosY, sinY, cosP, sinP, 0.0);
+            vec3 halfVec = normalize(lightLocal + viewLocal);
+
+            float diff = max(0.0, dot(nrm, lightLocal));
+            float spec = pow(max(0.0, dot(nrm, halfVec)), 12.0);
+            float rim = pow(1.0 - max(0.0, dot(nrm, viewLocal)), 2.2) * 0.35;
+            // High-contrast 3D metallic curve: lit bevel hits solid █ while shaded bevel grades ▓ -> ▒ -> ░
+            float lum = clamp(0.12 + pow(diff, 0.85) * 0.78 + spec * 0.85 + rim * 0.28, 0.08, 0.999);
+
+            int shadeLvl = 1 + int(floor(lum * 3.99));
+            if (hitMat > 2.5 || (hitMat < 1.5 && rim > 0.24 && spec > 0.14)) {
+                charColor = redCol;
+                charAlpha = 0.96;
+            } else if (hitMat < 1.5 && (lum > 0.72 || spec > 0.25)) {
+                charColor = brightCol;
+                charAlpha = 0.98;
+            } else if (hitMat < 1.5) {
+                charColor = mix(dimCol, brightCol, lum * 0.72);
+                charAlpha = 0.88;
+            } else {
+                charColor = dimCol;
+                charAlpha = 0.72;
+            }
+
+            float blockMask = sampleShadeBlock(shadeLvl, sCellUV) * charAlpha;
+            vec3 swordRgb = mix(bgCol, charColor, blockMask);
+            fragColor = vec4(swordRgb, 1.0) * ubuf.qt_Opacity;
+            return;
+        }
+        fragColor = vec4(bgCol, 1.0) * ubuf.qt_Opacity;
+        return;
     } else {
         vec3 wpSample = texture(wallpaperTex, cellCenterUV).rgb;
         float rawLum = dot(wpSample, vec3(0.299, 0.587, 0.114));
-        // Auto-contrast stretch so dark wallpapers still show rich * # % @ detail
         float baseLum = smoothstep(0.02, 0.65, rawLum);
-        // Boost color saturation so green/blue/gold hues stay vivid instead of washed-out white
         vec3 satWp = mix(vec3(rawLum), wpSample, 1.65);
         vec3 vividWp = clamp(satWp * (1.35 + baseLum * 0.65), 0.0, 1.0);
 

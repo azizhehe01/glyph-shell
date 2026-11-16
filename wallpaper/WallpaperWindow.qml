@@ -132,6 +132,19 @@ PanelWindow {
                 " ▒ ▓ █ @ █ ▓ ▒ ░ · : = + * # % @ ",
                 " ░ ▒ ▓ █ ▓ ▒ ░ · . : - = + * # % "
             ]
+        },
+        {
+            id: "silent-blade",
+            title: "SILENT BLADE",
+            res: "MINIMAL · 3D SWORD",
+            tag: "MINIMALIST",
+            art: [
+                "                /\\                ",
+                "                ||                ",
+                "                ||                ",
+                "            ====♦====             ",
+                "                ||                "
+            ]
         }
     ]
 

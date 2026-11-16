@@ -49,6 +49,7 @@ PanelWindow {
         if (p === "ascii-torus") return 3;
         if (p === "halftone-pulse") return 4;
         if (p === "wallpaper-ascii") return 5;
+        if (p === "silent-blade") return 6;
         return 0;
     }
 
