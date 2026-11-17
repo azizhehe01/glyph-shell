@@ -12,6 +12,7 @@ import "emoji"
 import "keybinds"
 import "overview"
 import "power"
+import "lockscreen"
 
 ShellRoot {
     DesktopWidgetsWindow {
@@ -97,5 +98,10 @@ ShellRoot {
 
     PowerWindow {
         id: powerMenu
+    }
+
+    LockscreenWindow {
+        id: lockscreenWindow
+        asciiWallpaperRef: asciiWallpaper
     }
 }
