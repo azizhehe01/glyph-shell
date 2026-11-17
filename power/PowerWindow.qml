@@ -129,7 +129,7 @@ PanelWindow {
 
     Process {
         id: statusProc
-        command: ["python3", "/home/azhehe/.config/quickshell/DesktopWidgetsApp/power/power.py", "status"]
+        command: ["python3", Quickshell.shellDir + "/power/power.py", "status"]
         running: false
         stdout: StdioCollector {
             onStreamFinished: {
@@ -187,10 +187,10 @@ PanelWindow {
         if (!force && root.pendingAction !== "" && root.pendingAction === actionId) {
             root.pendingAction = "";
             root.close();
-            Quickshell.execDetached(["python3", "/home/azhehe/.config/quickshell/DesktopWidgetsApp/power/power.py", "cancel"]);
+            Quickshell.execDetached(["python3", Quickshell.shellDir + "/power/power.py", "cancel"]);
             return;
         }
-        var args = ["python3", "/home/azhehe/.config/quickshell/DesktopWidgetsApp/power/power.py", actionId];
+        var args = ["python3", Quickshell.shellDir + "/power/power.py", actionId];
         if (force) args.push("--force");
         root.pendingAction = "";
         root.close();

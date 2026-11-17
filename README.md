@@ -109,15 +109,15 @@ Dibangun secara native menggunakan framework **[Quickshell](https://quickshell.o
 
 ---
 
-### 5. 🔒 Nothing OS Dot-Matrix Lock Screen (`lockscreen/`)
-* Menggantikan lockscreen bawaan dengan engine native **`hyprlock` (v0.9.6)** yang aman dan hemat daya.
-* **Dynamic Desktop Wallpaper Blur & ASCII Sync:** Script [`lockscreen/lock.sh`](lockscreen/lock.sh) otomatis mendeteksi mode wallpaper aktif:
-  * **Mode Image:** Menggunakan foto wallpaper aktif dengan *deep Dual-Kawase blur* (`blur_passes = 4`, `blur_size = 8`).
-  * **Mode ASCII (`SILENT BLADE`):** Mengambil *snapshot* frame GPU dari shader ASCII + warna background pilihan lo dengan `blur_passes = 0` agar matriks *shade blocks* tetap tajam.
-* **Top Status Header:** Menampilkan `[:::] WIFI · <SSID>` di kiri atas dan `BAT XX% [●●●○○]` di kanan atas.
-* **Hero Clock & Weather:** Jam raksasa dengan font resmi `Ndot 57` dan baris tanggal/cuaca dari cache lokal.
-* **Interactive Media Pill:** Menampilkan judul lagu, artis, serta tombol klik `[ |◁ PREV ]`, `[ ⏸ PAUSE ]`, dan `[ NEXT ▷| ]`.
-* **Glyph Passcode Capsule:** Input password kapsul kaca gelap dengan placeholder `ENTER PASSCODE` (tanpa teks fingerprint), titik password dot-matrix, dan fail state merah Nothing OS (`#D71921` — `ACCESS DENIED`).
+### 5. 🔒 Native Quickshell Dot-Matrix Lock Screen (`lockscreen/`)
+* 100% Native **Quickshell (`WlSessionLock` + `Quickshell.Services.Pam`)** — tanpa ketergantungan `hyprlock` untuk tampilan utama.
+* **Tengah Layar Bersih & Sinkronisasi Wallpaper:**
+  * **Mode ASCII (`SILENT BLADE`):** Merender langsung shader GPU pedang 3D berputar di belakang layar dengan warna background pilihan lo.
+  * **Mode Image:** Menampilkan wallpaper aktif dengan *Chameleon Frosted Glass blur*.
+* **Bottom Widget Dock Minimalis:**
+  * **Analog + Dot-Matrix Clock Card (`#000000`, `radius: 26`):** Jam analog real-time dengan 3 jarum bergerak tiap detik + jam digital `Ndot57` dua warna (oranye/putih) + tanggal.
+  * **Auto-Hide Music Pill (MPRIS):** Muncul otomatis *hanya* saat memutar lagu (memprioritaskan Spotify di atas tab browser), lengkap dengan cover album `OpacityMask`, progress bar real-time, dan 3 kontrol bulat (`‹`, `▶/⏸`, `›`).
+* **Auto-Show Passcode Dots (Zero Capsule):** Input password tersembunyi saat idle; begitu mengetik atau klik layar, titik-titik putih muncul mulus dari kiri ke kanan tanpa kotak kapsul.
 
 ---
 
@@ -286,9 +286,13 @@ glyph-shell/
 │   ├── KeybindsWindow.qml          # Modal Keybindings Viewer & Search (cari aksi/tombol)
 │   └── keybinds.py                 # Parser konfigurasi keybindings Hyprland
 ├── lockscreen/
-│   ├── hyprlock.conf               # Konfigurasi visual Dot-Matrix untuk engine hyprlock
-│   ├── lock.sh                     # Launcher script deteksi wallpaper aktif & hyprlock
-│   └── status.py                   # Provider data WiFi, baterai, cuaca & kontrol MPRIS
+│   ├── LockscreenWindow.qml        # Native WlSessionLock + PamContext lockscreen (Clock & MPRIS Dock)
+│   ├── lock.sh                     # Launcher IPC lockscreen Quickshell (dengan fallback hyprlock)
+│   ├── hyprlock.conf               # Konfigurasi fallback darurat untuk hyprlock
+│   └── status.py                   # Provider data status fallback
+├── hypr/
+│   ├── autostart.lua               # Konfigurasi startup mandiri Hyprland (zero ML4W bloat)
+│   └── keybindings.lua             # Preset lengkap shortcut glyph-shell untuk Hyprland
 ├── notch/
 │   ├── NotchWindow.qml             # Window Top Notch, Angry Eyes, Dynamic Island, Rage & Relief Mode
 │   ├── bluetooth.py                # Daemon Bluetooth native berbasis BlueZ (bluetoothctl)

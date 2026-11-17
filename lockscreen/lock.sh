@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SHELL_DIR="/home/azhehe/.config/quickshell/DesktopWidgetsApp"
+SHELL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Primary: Native Quickshell Lockscreen (WlSessionLock + PamContext)
 if command -v qs >/dev/null 2>&1; then

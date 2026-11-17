@@ -109,15 +109,31 @@ find "$SCRIPT_DIR" -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} 
 printf "  ${C_GREEN}✓${C_RESET} Seluruh background service & launcher script sudah executable.\n"
 
 # -----------------------------------------------------------------------------
-# 4. Hyprland & Hyprlock Integrasi
+# 4. Hyprland Autostart, Keybindings & Lockscreen Integrasi
 # -----------------------------------------------------------------------------
-printf "\n${C_BOLD}[4/5] Mengintegrasikan Lock Screen & Hyprland...${C_RESET}\n"
-mkdir -p "$HYPR_DIR"
+printf "\n${C_BOLD}[4/5] Mengintegrasikan Config Hyprland (Autostart, Keybinds & Lockscreen)...${C_RESET}\n"
+mkdir -p "$HYPR_DIR/conf/keybindings"
 
-# Symlink hyprlock.conf
+# Symlink Hyprland autostart.lua & keybindings/default.lua (with safe .bak backup)
+if [[ -f "$SCRIPT_DIR/hypr/autostart.lua" ]]; then
+    if [[ -f "$HYPR_DIR/conf/autostart.lua" && ! -L "$HYPR_DIR/conf/autostart.lua" ]]; then
+        cp "$HYPR_DIR/conf/autostart.lua" "$HYPR_DIR/conf/autostart.lua.bak"
+    fi
+    ln -sfn "$SCRIPT_DIR/hypr/autostart.lua" "$HYPR_DIR/conf/autostart.lua"
+    printf "  ${C_GREEN}✓${C_RESET} Symlink Hyprland Autostart: %s/conf/autostart.lua\n" "$HYPR_DIR"
+fi
+
+if [[ -f "$SCRIPT_DIR/hypr/keybindings.lua" ]]; then
+    if [[ -f "$HYPR_DIR/conf/keybindings/default.lua" && ! -L "$HYPR_DIR/conf/keybindings/default.lua" ]]; then
+        cp "$HYPR_DIR/conf/keybindings/default.lua" "$HYPR_DIR/conf/keybindings/default.lua.bak"
+    fi
+    ln -sfn "$SCRIPT_DIR/hypr/keybindings.lua" "$HYPR_DIR/conf/keybindings/default.lua"
+    printf "  ${C_GREEN}✓${C_RESET} Symlink Hyprland Keybinds: %s/conf/keybindings/default.lua\n" "$HYPR_DIR"
+fi
+
+# Symlink hyprlock.conf (emergency fallback only)
 if [[ -f "$SCRIPT_DIR/lockscreen/hyprlock.conf" ]]; then
     ln -sfn "$SCRIPT_DIR/lockscreen/hyprlock.conf" "$HYPR_DIR/hyprlock.conf"
-    printf "  ${C_GREEN}✓${C_RESET} Symlink Hyprlock aktif: %s/hyprlock.conf\n" "$HYPR_DIR"
 fi
 
 # Initialize glyph-shell wallpapers folder & thumbnail cache
@@ -143,7 +159,7 @@ fi
 printf "\n${C_BOLD}[5/5] Memeriksa paket pendukung (dependencies)...${C_RESET}\n"
 missing_deps=()
 
-for cmd in qs playerctl brightnessctl nmcli python3 hyprlock; do
+for cmd in qs playerctl brightnessctl nmcli python3 wl-paste cliphist grim awww-daemon; do
     if command -v "$cmd" >/dev/null 2>&1; then
         printf "  ${C_GREEN}✓${C_RESET} %-14s : terpasang (%s)\n" "$cmd" "$(command -v "$cmd")"
     else
