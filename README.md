@@ -111,7 +111,9 @@ Dibangun secara native menggunakan framework **[Quickshell](https://quickshell.o
 
 ### 5. 🔒 Nothing OS Dot-Matrix Lock Screen (`lockscreen/`)
 * Menggantikan lockscreen bawaan dengan engine native **`hyprlock` (v0.9.6)** yang aman dan hemat daya.
-* **Dynamic Desktop Wallpaper Blur:** Script [`lockscreen/lock.sh`](lockscreen/lock.sh) mendeteksi wallpaper aktif lo saat itu untuk efek *deep Dual-Kawase blur* (`blur_passes = 4`, `blur_size = 8`).
+* **Dynamic Desktop Wallpaper Blur & ASCII Sync:** Script [`lockscreen/lock.sh`](lockscreen/lock.sh) otomatis mendeteksi mode wallpaper aktif:
+  * **Mode Image:** Menggunakan foto wallpaper aktif dengan *deep Dual-Kawase blur* (`blur_passes = 4`, `blur_size = 8`).
+  * **Mode ASCII (`SILENT BLADE`):** Mengambil *snapshot* frame GPU dari shader ASCII + warna background pilihan lo dengan `blur_passes = 0` agar matriks *shade blocks* tetap tajam.
 * **Top Status Header:** Menampilkan `[:::] WIFI · <SSID>` di kiri atas dan `BAT XX% [●●●○○]` di kanan atas.
 * **Hero Clock & Weather:** Jam raksasa dengan font resmi `Ndot 57` dan baris tanggal/cuaca dari cache lokal.
 * **Interactive Media Pill:** Menampilkan judul lagu, artis, serta tombol klik `[ |◁ PREV ]`, `[ ⏸ PAUSE ]`, dan `[ NEXT ▷| ]`.
@@ -127,12 +129,18 @@ Dibangun secara native menggunakan framework **[Quickshell](https://quickshell.o
 
 ---
 
-### 7. 🖼️ Native Wallpaper Carousel (`wallpaper/`)
+### 7. 🖼️ Native Wallpaper Carousel & 100% Pure GPU Live ASCII (`wallpaper/`)
 * Dibuka/tutup dengan shortcut **`Ctrl + Super + W`** (dan **`Super + Shift + W`** untuk random wallpaper).
-* **Bottom-Edge Horizontal Filmstrip:** Muncul mulus dari sisi bawah layar (bottom dock), membiarkan 85% layar tetap bersih agar lo bisa menikmati transisi wallpaper secara utuh.
-* **Live Instant Preview (60fps):** Geser menggunakan tombol panah **`←`** / **`→`** (atau scroll mouse) dan wallpaper desktop langsung berubah secara *real-time* via `awww`. Jika menekan **`ESC`** atau klik di luar dock, wallpaper otomatis kembali ke wallpaper semula.
-* **Dedicated Wallpaper Folder:** Mandiri penuh di `~/.config/quickshell/glyph-shell/wallpapers/` (lepas dari ketergantungan ML4W) dengan caching thumbnail 16:9 ringan di `~/.cache/glyph-shell/thumbs/`.
-* **Full Ecosystem Sync:** Menekan **`Enter`** otomatis menyinkronkan wallpaper aktif, Chameleon Frosted Glass pada widget desktop & notifikasi, lockscreen `hyprlock`, serta palet warna `matugen`.
+* **Dual-Mode Switcher (`[ IMAGE ]` | `[ ⠿ ASCII LIVE ]`):** Tekan **`Tab`** atau klik pill di header untuk beralih antara galeri foto statis dan live shader ASCII.
+* **`SILENT BLADE` — Minimalist 3D Shade-Block Sword (`480×270`):**
+  * Menampilkan bilah pedang 3D *raymarched* beresolusi tinggi menggunakan **Edge-to-Edge Unicode Shade Blocks (`░ ▒ ▓ █`)** di atas background polos bersih tanpa *clutter*.
+  * Melayang naik-turun, berputar pelan 360°, serta bereaksi terhadap gerakan kursor (*3D tilt* halus) dengan aksen **Nothing Red (`#D71921`)**.
+* **100% Pure GPU Shader & Smart Auto-Pause:**
+  * Dirender langsung di GPU menggunakan **Qt6 RHI `ShaderEffect` (GLSL 440 → SPIR-V `.qsb`)** tanpa loop JavaScript per-frame (**0% beban CPU**).
+  * Otomatis **pause (0% CPU & 0% GPU)** ketika ada window aplikasi yang terbuka di workspace aktif, dan langsung **mati total (*unloaded*)** saat memakai wallpaper gambar biasa.
+* **HSV Background Color Picker (`BG #HEX`):**
+  * Tombol **`BG #HEX`** di header mode ASCII membuka popover **HSV Color Picker** (*2D Saturation × Darkness box*, *Rainbow Hue slider*, *Preview Swatch*, input kode `#HEX`, dan tombol **`RESET`** ke `#07080A`) dengan *live preview* real-time dan adaptasi kontras otomatis.
+* **Bottom-Edge Horizontal Filmstrip & Live Preview:** Muncul mulus dari sisi bawah layar (bottom dock), membiarkan 85% layar tetap bersih. Geser dengan **`←`** / **`→`**, tekan **`Enter`** untuk menerapkan & menyinkronkan ke seluruh ekosistem (Frosted Glass widget, Lockscreen `hyprlock`, & `matugen`), atau **`ESC`** untuk batal.
 
 ---
 
@@ -302,8 +310,12 @@ glyph-shell/
 │   ├── DesktopWidgetsWindow.qml    # Window utama bento grid widget desktop & circular ring gauges
 │   └── stats.py                    # Service pengambil lirik, cuaca, RAM, partisi sistem & baterai
 ├── wallpaper/
-│   ├── WallpaperWindow.qml         # Bottom-edge horizontal wallpaper filmstrip & live preview
-│   └── wallpaper.py                # Engine wallpaper standalone, thumbnail cache & frosted blur sync
+│   ├── WallpaperWindow.qml         # Bottom-edge wallpaper filmstrip, Dual-Mode & HSV Color Picker
+│   ├── AsciiWallpaperWindow.qml    # 100% Pure GPU ShaderEffect host + Smart Window Auto-Pause
+│   ├── ascii_wallpaper.frag        # GLSL 440 raymarched 3D Shade-Block Sword shader
+│   ├── ascii_wallpaper_v2.frag.qsb # Compiled Qt6 RHI SPIR-V shader binary
+│   ├── ascii_font_atlas.png        # Monospace GPU glyph texture atlas
+│   └── wallpaper.py                # Engine wallpaper standalone, state JSON, lockscreen & blur sync
 ├── wallpapers/                     # Koleksi wallpaper mandiri glyph-shell
 ├── install.sh                      # Turnkey setup & installer script
 ├── LICENSE                         # Lisensi MIT
