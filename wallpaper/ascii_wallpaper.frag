@@ -59,6 +59,28 @@ float hash21(vec2 p) {
     return fract(p.x * p.y);
 }
 
+float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = hash21(i);
+    float b = hash21(i + vec2(1.0, 0.0));
+    float c = hash21(i + vec2(0.0, 1.0));
+    float d = hash21(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float fbmFlame(vec2 p) {
+    float v = 0.0;
+    float a = 0.55;
+    for (int i = 0; i < 3; i++) {
+        v += a * vnoise(p);
+        p = p * 2.08 + vec2(1.7, -3.1);
+        a *= 0.5;
+    }
+    return v;
+}
+
 vec3 rotate3D(vec3 p, float cosA, float sinA, float cosB, float sinB) {
     vec3 rx = vec3(p.x, p.y * cosA - p.z * sinA, p.y * sinA + p.z * cosA);
     return vec3(rx.x * cosB - rx.y * sinB, rx.x * sinB + rx.y * cosB, rx.z);
@@ -135,6 +157,61 @@ vec3 calcSwordNormal(vec3 p) {
         sdSword(p + vec3(e, 0.0, 0.0)).x - sdSword(p - vec3(e, 0.0, 0.0)).x,
         sdSword(p + vec3(0.0, e, 0.0)).x - sdSword(p - vec3(0.0, e, 0.0)).x,
         sdSword(p + vec3(0.0, 0.0, e)).x - sdSword(p - vec3(0.0, 0.0, e)).x
+    ));
+}
+
+// =========================================================================
+// 3D SOLITAIRE PRISM DIAMOND RING SDF (matId: 1=metal band/prongs, 2=diamond)
+// =========================================================================
+vec2 sdDiamondRing(vec3 p) {
+    // 1. Sleek Circular Metal Band (upright in XY plane, centered at y = -0.22)
+    vec3 bp = p - vec3(0.0, -0.22, 0.0);
+    float bandR = 0.62;
+    float qx = length(bp.xy) - bandR;
+    // Slightly thicker toward the top shoulders of the ring
+    float topBoost = smoothstep(0.15, 0.62, bp.y) * 0.018;
+    float bandTube = 0.068 + topBoost;
+    float dBand = length(vec2(qx, bp.z * 0.78)) - bandTube;
+
+    // 2. Crown Setting Base Collar & 4 Sleek Prongs gripping the diamond
+    float dCollar = length(vec2(length(p.xz) - 0.14, p.y - 0.43)) - 0.036;
+    vec3 pp = vec3(abs(p.x), p.y, abs(p.z));
+    float dProng = sdCapsule(pp, vec3(0.10, 0.42, 0.10), vec3(0.21, 0.68, 0.21), 0.024);
+    float dMetal = min(dBand, min(dCollar, dProng));
+
+    // 3. 8-Fold Brilliant-Cut Faceted Diamond (centered at y = 0.66)
+    vec3 dp = p - vec3(0.0, 0.66, 0.0);
+    vec2 xz = abs(dp.xz);
+    if (xz.y > xz.x) xz = xz.yx;
+    // Regular octagon distance (8 crisp flat sides)
+    float r8 = max(xz.x, dot(xz, vec2(0.70710678, 0.70710678)));
+    // Secondary star facets at 22.5 deg for richer brilliant-cut sparkle
+    float r16 = dot(xz, vec2(0.92387953, 0.38268343));
+    float rFacet = max(r8, r16 * 0.96);
+
+    float dPavilion = (rFacet * 0.74 - dp.y * 0.67) - 0.245;
+    float dCrown    = (rFacet * 0.64 + dp.y * 0.77) - 0.248;
+    float dTable    = dp.y - 0.155;
+    float dDiamond  = max(max(dPavilion, dCrown), dTable);
+
+    if (dDiamond < dMetal) {
+        return vec2(dDiamond, 2.0);
+    }
+    return vec2(dMetal, 1.0);
+}
+
+vec3 transformRing(vec3 p, float cosY, float sinY, float cosP, float sinP, float hoverY) {
+    p.y -= hoverY;
+    vec3 px = vec3(p.x, p.y * cosP - p.z * sinP, p.y * sinP + p.z * cosP);
+    return vec3(px.x * cosY + px.z * sinY, px.y, -px.x * sinY + px.z * cosY);
+}
+
+vec3 calcRingNormal(vec3 p) {
+    const float e = 0.003;
+    return normalize(vec3(
+        sdDiamondRing(p + vec3(e, 0.0, 0.0)).x - sdDiamondRing(p - vec3(e, 0.0, 0.0)).x,
+        sdDiamondRing(p + vec3(0.0, e, 0.0)).x - sdDiamondRing(p - vec3(0.0, e, 0.0)).x,
+        sdDiamondRing(p + vec3(0.0, 0.0, e)).x - sdDiamondRing(p - vec3(0.0, 0.0, e)).x
     ));
 }
 
@@ -382,6 +459,192 @@ void main() {
             fragColor = vec4(swordRgb, 1.0) * ubuf.qt_Opacity;
             return;
         }
+        fragColor = vec4(bgCol, 1.0) * ubuf.qt_Opacity;
+        return;
+    } else if (ubuf.presetId == 7) {
+        // PRESET 7: INFERNO PRISM (White Crystal 3D Diamond Engulfed in Organic Blue Fire)
+        vec2 ringGrid = vec2(480.0, 270.0);
+        vec2 rGridPos = qt_TexCoord0 * ringGrid;
+        vec2 rCellIdx = floor(rGridPos);
+        vec2 rCellUV = fract(rGridPos);
+        vec2 rCenterUV = (rCellIdx + 0.5) / ringGrid;
+
+        vec2 p2d = vec2((rCenterUV.x - 0.56) * aspect, -(rCenterUV.y - 0.50)) * 2.15;
+        vec3 ro = vec3(0.0, 0.14, -3.28);
+        vec3 rd = normalize(vec3(p2d, 1.58));
+
+        float hoverY = sin(t * 1.10) * 0.045;
+        float yaw = t * 0.62 + ((cursorPx.x / res.x) - 0.5) * 1.9;
+        float pitch = 0.22 + ((cursorPx.y / res.y) - 0.5) * 0.60;
+        float cosY = cos(yaw), sinY = sin(yaw);
+        float cosP = cos(pitch), sinP = sin(pitch);
+
+        // Projected screen position of the diamond center
+        float crownY3 = 0.66 * cosP;
+        float crownZ3 = 0.66 * sinP;
+        float diamondScreenY = (crownY3 + hoverY - ro.y) * 1.58 / (3.28 + crownZ3);
+
+        // Cursor Wind Draft (sways the blue flame tongues smoothly)
+        vec2 cursorP2d = vec2(((cursorPx.x / res.x) - 0.56) * aspect, -((cursorPx.y / res.y) - 0.50)) * 2.15;
+        float cursorDist = length(cursorP2d - vec2(0.0, diamondScreenY + 0.12));
+        float windStrength = smoothstep(1.30, 0.05, cursorDist);
+        float windDir = clamp((0.0 - cursorP2d.x) * 0.55, -0.38, 0.38) * windStrength;
+
+        // Multi-tongue Organic Blue Fire wrapping cleanly around the diamond (zero stray noise!)
+        float flameBaseY = diamondScreenY - 0.14;
+        // Curve the flame base slightly upward along the sides so it hugs the diamond's V-shape
+        float fy = p2d.y - (flameBaseY + abs(p2d.x) * 0.42);
+        float flameIntensity = 0.0;
+        float frontFlameMask = 0.0;
+
+        if (fy > -0.02 && fy < 0.88 && abs(p2d.x) < 0.52) {
+            float normY = clamp(fy / 0.84, 0.0, 1.0);
+            float windBend = windDir * normY * normY * 0.72;
+
+            // Domain-warped turbulence for organic flickering flame tongues
+            float warpA = (fbmFlame(vec2(p2d.x * 4.5, fy * 3.8 - t * 3.4)) - 0.5) * 0.22 * (0.35 + normY);
+            float fx = p2d.x - windBend + warpA;
+
+            // 3 distinct organic flame tongues: Left side wrap + Main center + Right side wrap
+            float lSway = sin(fy * 7.2 - t * 5.2 + 1.1) * 0.032 * normY;
+            float cSway = sin(fy * 5.8 - t * 4.5) * 0.028 * normY;
+            float rSway = sin(fy * 6.8 - t * 4.9 + 3.4) * 0.032 * normY;
+
+            // Left tongue hugging left girdle & rising independently
+            float lNormY = clamp(fy / 0.62, 0.0, 1.0);
+            float lX = (fx + 0.145 * (1.0 - lNormY * 0.45) - lSway) / mix(0.135, 0.024, pow(lNormY, 0.9));
+            float lLobe = max(0.0, 1.0 - lX * lX) * (1.0 - pow(lNormY, 1.25));
+
+            // Right tongue hugging right girdle & rising independently
+            float rNormY = clamp(fy / 0.66, 0.0, 1.0);
+            float rX = (fx - 0.145 * (1.0 - rNormY * 0.45) - rSway) / mix(0.135, 0.024, pow(rNormY, 0.9));
+            float rLobe = max(0.0, 1.0 - rX * rX) * (1.0 - pow(rNormY, 1.25));
+
+            // Main central fire core hugging the whole diamond body
+            float cX = (fx - cSway) / mix(0.235, 0.034, pow(normY, 1.05));
+            float cLobe = max(0.0, 1.0 - cX * cX) * (1.0 - pow(normY, 1.30));
+
+            float combinedShape = max(cLobe, max(lLobe * 0.92, rLobe * 0.92));
+
+            // Fine upward-licking plasma wisps — strictly bounded by combinedShape so ZERO stray spots appear!
+            float turb = fbmFlame(vec2(fx * 6.8, fy * 5.2 - t * 4.4));
+            float fineWisp = fbmFlame(vec2(fx * 12.5 - t * 0.8, fy * 9.0 - t * 6.2));
+
+            float rawFlame = combinedShape * (0.65 + turb * 1.15 + fineWisp * 0.42) - normY * 0.14;
+            flameIntensity = clamp(rawFlame, 0.0, 1.0) * smoothstep(-0.02, 0.11, fy) * smoothstep(0.0, 0.10, combinedShape);
+
+            // Foreground fire tongues that visibly lick across the FRONT & rim of the white diamond
+            float frontNoise = fbmFlame(vec2(fx * 8.5 + 2.3, fy * 6.8 - t * 5.2));
+            float edgeFocus = smoothstep(0.03, 0.17, abs(p2d.x)) + smoothstep(0.26, 0.02, fy) * 0.65;
+            frontFlameMask = clamp((frontNoise - 0.36) * 2.4 * edgeFocus * smoothstep(0.42, 0.02, fy), 0.0, 1.0);
+        }
+
+        // Raymarch 3D Solitaire Ring + Diamond
+        float distR = 0.0;
+        bool hitR = false;
+        vec3 hitPos = vec3(0.0);
+        float hitMat = 1.0;
+
+        for (int i = 0; i < 44; i++) {
+            vec3 rp = transformRing(ro + rd * distR, cosY, sinY, cosP, sinP, hoverY);
+            vec2 resR = sdDiamondRing(rp);
+            if (resR.x < 0.0035) {
+                hitR = true;
+                hitPos = rp;
+                hitMat = resR.y;
+                break;
+            }
+            distR += resR.x * 0.78;
+            if (distR > 6.5) break;
+        }
+
+        // Blue Fire Palette
+        vec3 iceWhite  = vec3(0.92, 0.99, 1.00); // #EBFCFF (Hottest flame core)
+        vec3 elecCyan  = vec3(0.14, 0.84, 1.00); // #24D6FF (Bright electric blue flame)
+        vec3 cobaltBlu = vec3(0.06, 0.42, 1.00); // #0F6BFF (Mid cobalt flame)
+        vec3 deepIndig = vec3(0.05, 0.16, 0.74); // #0D29BD (Outer wispy blue flame)
+
+        if (hitR) {
+            vec3 nrm = calcRingNormal(hitPos);
+            vec3 light1 = transformRing(normalize(vec3(0.68, 0.78, -0.70)), cosY, sinY, cosP, sinP, 0.0);
+            vec3 light2 = transformRing(normalize(vec3(-0.72, 0.40, -0.55)), cosY, sinY, cosP, sinP, 0.0);
+            vec3 viewLocal = transformRing(normalize(vec3(0.0, 0.0, -1.0)), cosY, sinY, cosP, sinP, 0.0);
+            vec3 half1 = normalize(light1 + viewLocal);
+            vec3 half2 = normalize(light2 + viewLocal);
+
+            float diff1 = max(0.0, dot(nrm, light1));
+            float diff2 = max(0.0, dot(nrm, light2));
+            float spec1 = pow(max(0.0, dot(nrm, half1)), hitMat > 1.5 ? 24.0 : 14.0);
+            float spec2 = pow(max(0.0, dot(nrm, half2)), 18.0);
+            float fresnel = pow(1.0 - max(0.0, dot(nrm, viewLocal)), 2.0);
+
+            float lum;
+            if (hitMat > 1.5) {
+                // PURE WHITE CRYSTAL DIAMOND (#FFFFFF) with sharp facets + foreground blue flame licks!
+                lum = clamp(0.24 + diff1 * 0.56 + diff2 * 0.24 + spec1 * 1.15 + spec2 * 0.70 + fresnel * 0.22, 0.16, 0.999);
+                vec3 crystalCol = (lum > 0.66 || spec1 > 0.26)
+                    ? vec3(1.0, 1.0, 1.0)
+                    : mix(vec3(0.70, 0.75, 0.82), vec3(1.0, 1.0, 1.0), lum * 0.85);
+
+                // Foreground blue flame licking across the front & rim of the white diamond
+                float rimBurn = clamp(fresnel * 0.72 * flameIntensity + frontFlameMask * 1.15, 0.0, 1.0);
+                if (rimBurn > 0.34) {
+                    vec3 lickCol = mix(cobaltBlu, elecCyan, clamp((rimBurn - 0.34) * 1.8, 0.0, 1.0));
+                    charColor = mix(crystalCol, lickCol, clamp((rimBurn - 0.28) * 1.6, 0.0, 0.94));
+                    lum = max(lum, 0.55 + rimBurn * 0.40);
+                    charAlpha = 0.98;
+                } else {
+                    // Subtle cool cyan edge reflection on white facets
+                    charColor = mix(crystalCol, elecCyan, fresnel * 0.18);
+                    charAlpha = 0.98;
+                }
+            } else {
+                // Cool metallic silver/slate ring band + blue fire licking around upper prongs
+                float prongGlow = smoothstep(0.18, 0.62, hitPos.y);
+                lum = clamp(0.12 + diff1 * 0.62 + diff2 * 0.20 + spec1 * 0.68 + fresnel * 0.24, 0.08, 0.999);
+                vec3 metalCol = (lum > 0.74 || spec1 > 0.34)
+                    ? brightCol
+                    : mix(dimCol, brightCol, lum * 0.55);
+                float prongLick = clamp(prongGlow * (0.35 + frontFlameMask * 0.85), 0.0, 0.85);
+                charColor = mix(metalCol, elecCyan, prongLick);
+                charAlpha = 0.88;
+            }
+
+            int shadeLvl = 1 + int(floor(lum * 3.99));
+            float blockMask = sampleShadeBlock(shadeLvl, rCellUV) * charAlpha;
+            vec3 ringRgb = mix(bgCol, charColor, blockMask);
+            fragColor = vec4(ringRgb, 1.0) * ubuf.qt_Opacity;
+            return;
+        }
+
+        // Render Blue Flame engulfing the sides & rising above the diamond (480x270 Shade Blocks)
+        if (flameIntensity > 0.11) {
+            int fLvl;
+            vec3 fCol;
+            float fAlpha;
+            if (flameIntensity > 0.72) {
+                fLvl = 4; // █ Hottest cyan-white base
+                fCol = mix(elecCyan, iceWhite, (flameIntensity - 0.72) * 3.2);
+                fAlpha = 0.98;
+            } else if (flameIntensity > 0.45) {
+                fLvl = 3; // ▓ Bright electric blue
+                fCol = mix(cobaltBlu, elecCyan, (flameIntensity - 0.45) / 0.27);
+                fAlpha = 0.94;
+            } else if (flameIntensity > 0.25) {
+                fLvl = 2; // ▒ Cobalt mid-flame
+                fCol = mix(deepIndig, cobaltBlu, (flameIntensity - 0.25) / 0.20);
+                fAlpha = 0.86;
+            } else {
+                fLvl = 1; // ░ Wispy indigo tips
+                fCol = deepIndig;
+                fAlpha = 0.76;
+            }
+            float fMask = sampleShadeBlock(fLvl, rCellUV) * fAlpha;
+            vec3 flameRgb = mix(bgCol, fCol, fMask);
+            fragColor = vec4(flameRgb, 1.0) * ubuf.qt_Opacity;
+            return;
+        }
+
         fragColor = vec4(bgCol, 1.0) * ubuf.qt_Opacity;
         return;
     } else {

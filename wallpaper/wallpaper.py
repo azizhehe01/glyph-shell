@@ -204,6 +204,14 @@ def sanitize_hex_color(val, fallback="#07080A"):
     return fallback
 
 
+VALID_ASCII_PRESETS = {"silent-blade", "diamond-ring"}
+
+
+def sanitize_ascii_preset(val, fallback="silent-blade"):
+    s = str(val or "").strip()
+    return s if s in VALID_ASCII_PRESETS else fallback
+
+
 def get_ascii_state():
     ensure_dirs_and_migrate()
     gpu_info = ensure_gpu_assets()
@@ -221,7 +229,7 @@ def get_ascii_state():
                 data = json.load(f)
             return {
                 "enabled": bool(data.get("enabled", False)),
-                "preset": "silent-blade",
+                "preset": sanitize_ascii_preset(data.get("preset", "silent-blade")),
                 "bg_color": sanitize_hex_color(data.get("bg_color", "#07080A")),
                 "wallpaper": gpu_info.get("wallpaper", ""),
                 "atlas": gpu_info.get("atlas", ""),
@@ -241,7 +249,8 @@ def set_ascii_state(enabled: bool, preset: str = "silent-blade", bg_color: str =
         except Exception:
             bg_color = "#07080A"
     clean_bg = sanitize_hex_color(bg_color or "#07080A")
-    state = {"enabled": bool(enabled), "preset": "silent-blade", "bg_color": clean_bg}
+    clean_preset = sanitize_ascii_preset(preset)
+    state = {"enabled": bool(enabled), "preset": clean_preset, "bg_color": clean_bg}
     try:
         with open(ASCII_STATE_FILE, "w") as f:
             json.dump(state, f)
@@ -257,7 +266,7 @@ def ensure_gpu_assets():
     wp_dir = os.path.join(SHELL_DIR, "wallpaper")
     atlas_path = os.path.join(wp_dir, "ascii_font_atlas.png")
     frag_path = os.path.join(wp_dir, "ascii_wallpaper.frag")
-    qsb_path = os.path.join(wp_dir, "ascii_wallpaper_v2.frag.qsb")
+    qsb_path = os.path.join(wp_dir, "ascii_wallpaper_v6.frag.qsb")
     font_path = os.path.join(SHELL_DIR, "assets", "fonts", "LetteraMonoLL-Regular.otf")
 
     # Ensure lock.sh is always executable

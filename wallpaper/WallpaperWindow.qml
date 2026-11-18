@@ -65,13 +65,26 @@ PanelWindow {
             id: "silent-blade",
             title: "SILENT BLADE",
             res: "480×270 · SHADE BLOCKS",
-            tag: "MINIMALIST",
+            tag: "3D SWORD",
             art: [
                 "                ▓▓                ",
                 "               ▒██▓               ",
                 "               ▒██▓               ",
                 "           ░░░░♦♦♦♦░░░░           ",
                 "                ▒▒                "
+            ]
+        },
+        {
+            id: "diamond-ring",
+            title: "INFERNO PRISM",
+            res: "480×270 · BLUE FLAME",
+            tag: "3D RING",
+            art: [
+                "               ░▒▓░               ",
+                "              ▒████▒              ",
+                "               ▓██▓               ",
+                "             ▒░    ░▒             ",
+                "             ▒▓▓▓▓▓▓▒             "
             ]
         }
     ]

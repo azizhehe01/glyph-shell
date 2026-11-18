@@ -39,8 +39,10 @@ PanelWindow {
     property string wallpaperSource: ""
 
     readonly property bool isShowing: root.asciiEnabled || root.previewActive
-    readonly property string currentPreset: "silent-blade"
-    readonly property int currentPresetId: 6
+    readonly property string currentPreset: (root.previewActive && root.previewPreset !== "")
+        ? root.previewPreset
+        : root.activePreset
+    readonly property int currentPresetId: (root.currentPreset === "diamond-ring") ? 7 : 6
     readonly property string currentBgColor: (root.previewActive && root.previewBgColor !== "")
         ? root.previewBgColor
         : root.activeBgColor
@@ -214,7 +216,7 @@ PanelWindow {
             property variant fontAtlas: fontAtlasImage
             property variant wallpaperTex: currentWallpaperImage
 
-            fragmentShader: Qt.resolvedUrl("ascii_wallpaper_v2.frag.qsb")
+            fragmentShader: Qt.resolvedUrl("ascii_wallpaper_v6.frag.qsb")
         }
     }
 }

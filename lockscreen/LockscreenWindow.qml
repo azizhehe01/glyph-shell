@@ -252,12 +252,12 @@ print(json.dumps({'wp': wp, 'wifi': wifi}))
                     property real cursorX: width * 0.54
                     property real cursorY: height * 0.48
                     property real cursorEnergy: 0.25
-                    property int presetId: 6
+                    property int presetId: root.asciiWallpaperRef ? root.asciiWallpaperRef.currentPresetId : 6
                     property color bgColor: root.activeBgColor
                     property variant fontAtlas: lockAtlasFallback
                     property variant wallpaperTex: lockAtlasFallback
 
-                    fragmentShader: Qt.resolvedUrl("../wallpaper/ascii_wallpaper_v2.frag.qsb")
+                    fragmentShader: Qt.resolvedUrl("../wallpaper/ascii_wallpaper_v6.frag.qsb")
                 }
 
                 Image {
