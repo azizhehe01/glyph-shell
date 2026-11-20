@@ -127,6 +127,11 @@ PanelWindow {
     property string passwordPromptSsid: ""
     property string enteredPassword: ""
     property bool showPasswordText: false
+    property bool showWifiQrView: false
+    property bool loadingWifiQr: false
+    property bool showQrPasswordText: false
+    property bool qrPasswordCopied: false
+    property var wifiQrData: ({ "success": false, "ssid": "", "security": "WPA", "password": "", "size": 0, "matrix": [] })
 
     // ---------------------------------------------------------------------
     // Bluetooth Manager Properties (Ctrl + Super + B — Pure BlueZ Native)
@@ -362,7 +367,7 @@ PanelWindow {
     readonly property int reliefNotchH: 54
     readonly property int rageNotchH: 64
     readonly property int displayNotchH: 84
-    readonly property int wifiNotchH: 284
+    readonly property int wifiNotchH: root.showWifiQrView ? 316 : 284
     readonly property int btNotchH: 284
     property real animatedNotchH: {
         if (showBluetoothMenu) return btNotchH;
@@ -389,7 +394,7 @@ PanelWindow {
 
     // Fixed stable window dimensions (mencegah Wayland surface resize jitter)
     readonly property int windowWidth: 560
-    readonly property int windowHeight: (root.showWifiMenu || root.showBluetoothMenu) ? 320 : (root.showDisplayMenu ? 110 : 96)
+    readonly property int windowHeight: (root.showWifiMenu || root.showBluetoothMenu) ? 350 : (root.showDisplayMenu ? 110 : 96)
     anchors.top: true
     implicitWidth: windowWidth
     implicitHeight: windowHeight
@@ -414,6 +419,9 @@ PanelWindow {
         root.showWifiMenu = true;
         root.passwordPromptSsid = "";
         root.enteredPassword = "";
+        root.showWifiQrView = false;
+        root.showQrPasswordText = false;
+        root.qrPasswordCopied = false;
         root.queryWifi();
     }
 
@@ -421,6 +429,33 @@ PanelWindow {
         root.showWifiMenu = false;
         root.passwordPromptSsid = "";
         root.enteredPassword = "";
+        root.showWifiQrView = false;
+        root.showQrPasswordText = false;
+        root.qrPasswordCopied = false;
+    }
+
+    function openWifiQr(ssid: string): void {
+        root.loadingWifiQr = true;
+        root.showWifiQrView = true;
+        root.showQrPasswordText = false;
+        root.qrPasswordCopied = false;
+        root.passwordPromptSsid = "";
+        shareWifiProc.targetSsid = ssid ? ssid : "";
+        shareWifiProc.running = false;
+        shareWifiProc.running = true;
+    }
+
+    function closeWifiQr(): void {
+        root.showWifiQrView = false;
+        root.showQrPasswordText = false;
+        root.qrPasswordCopied = false;
+    }
+
+    function copyWifiQrPassword(): void {
+        if (!root.wifiQrData || !root.wifiQrData.password) return;
+        Quickshell.execDetached(["wl-copy", root.wifiQrData.password]);
+        root.qrPasswordCopied = true;
+        qrCopyResetTimer.restart();
     }
 
     function queryWifi(): void {
@@ -514,6 +549,34 @@ PanelWindow {
         running: false
         stdout: StdioCollector {
             onStreamFinished: root.queryWifi()
+        }
+    }
+
+    Timer {
+        id: qrCopyResetTimer
+        interval: 1600
+        repeat: false
+        onTriggered: root.qrPasswordCopied = false
+    }
+
+    Process {
+        id: shareWifiProc
+        property string targetSsid: ""
+        command: targetSsid !== ""
+            ? ["python3", Quickshell.shellDir + "/notch/wifi.py", "share", targetSsid]
+            : ["python3", Quickshell.shellDir + "/notch/wifi.py", "share"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.loadingWifiQr = false;
+                try {
+                    let raw = this.text.trim();
+                    if (raw) {
+                        root.wifiQrData = JSON.parse(raw);
+                        qrDotCanvas.requestPaint();
+                    }
+                } catch (e) {}
+            }
         }
     }
 
@@ -2066,6 +2129,7 @@ PanelWindow {
             // 2. Network List (ListView)
             ListView {
                 id: wifiListView
+                visible: !root.showWifiQrView
                 anchors.top: wifiSep.bottom
                 anchors.topMargin: 4
                 anchors.left: parent.left
@@ -2119,13 +2183,14 @@ PanelWindow {
                                 font.bold: modelData.is_connected
                                 color: modelData.is_connected ? "#FFFFFF" : (netMouse.containsMouse ? "#FFFFFF" : "#CCCCCC")
                                 elide: Text.ElideRight
-                                width: Math.max(120, netItem.width - 78)
+                                width: Math.max(100, netItem.width - ((modelData.is_connected || modelData.is_saved) ? 112 : 78))
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                         }
 
                         // Right: Sinyal Dot-Matrix + Lock Icon
                         Row {
+                            id: wifiRightIcons
                             anchors.right: parent.right
                             anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
@@ -2201,6 +2266,38 @@ PanelWindow {
                                     root.enteredPassword = "";
                                     root.showPasswordText = false;
                                 }
+                            }
+                        }
+
+                        // QR Share Pill (sibling after netMouse so clicks open QR cleanly)
+                        Rectangle {
+                            id: qrTriggerBtn
+                            visible: modelData.is_connected || modelData.is_saved
+                            anchors.right: wifiRightIcons.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 26
+                            height: 18
+                            radius: 4
+                            color: qrTriggerMa.containsMouse ? "#D71921" : "#1F1F1F"
+                            border.width: 1
+                            border.color: qrTriggerMa.containsMouse ? "#D71921" : "#333333"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "QR"
+                                font.family: fontNMono.name || "monospace"
+                                font.pixelSize: 8
+                                font.bold: true
+                                color: "#FFFFFF"
+                            }
+
+                            MouseArea {
+                                id: qrTriggerMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.openWifiQr(modelData.ssid)
                             }
                         }
                     }
@@ -2352,6 +2449,254 @@ PanelWindow {
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2B. Nothing Dot-Matrix QR Share View (In-place)
+            Item {
+                id: wifiQrContainer
+                visible: root.showWifiQrView
+                anchors.top: wifiSep.bottom
+                anchors.topMargin: 6
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: wifiFooter.top
+                anchors.bottomMargin: 6
+
+                // Sub-header: <- BACK | SSID Badge
+                Item {
+                    id: qrSubHeader
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 22
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: qrBackTxt.implicitWidth + 14
+                        height: 20
+                        radius: 5
+                        color: qrBackMa.containsMouse ? "#262626" : "#161616"
+                        border.width: 1
+                        border.color: "#2E2E2E"
+
+                        Text {
+                            id: qrBackTxt
+                            anchors.centerIn: parent
+                            text: "← BACK"
+                            font.family: fontNMono.name || "monospace"
+                            font.pixelSize: 9
+                            font.bold: true
+                            color: "#FFFFFF"
+                        }
+
+                        MouseArea {
+                            id: qrBackMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.closeWifiQr()
+                        }
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 96
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                        text: (root.wifiQrData && root.wifiQrData.ssid)
+                            ? ("SSID · " + root.wifiQrData.ssid)
+                            : "SHARE WIFI"
+                        font.family: fontNMono.name || "monospace"
+                        font.pixelSize: 10
+                        font.bold: true
+                        color: "#FFFFFF"
+                    }
+                }
+
+                // Center White Quiet-Zone QR Card (Gaya B: Nothing Dot-Matrix + Red Cores)
+                Rectangle {
+                    id: qrCard
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: -2
+                    width: 156
+                    height: 156
+                    radius: 12
+                    color: "#FFFFFF"
+
+                    onVisibleChanged: {
+                        if (visible) qrDotCanvas.requestPaint();
+                    }
+
+                    Canvas {
+                        id: qrDotCanvas
+                        anchors.fill: parent
+                        anchors.margins: 10
+
+                        onPaint: {
+                            var ctx = getContext("2d");
+                            ctx.fillStyle = "#FFFFFF";
+                            ctx.fillRect(0, 0, width, height);
+
+                            var mat = root.wifiQrData ? root.wifiQrData.matrix : null;
+                            var n = root.wifiQrData ? (root.wifiQrData.size || 0) : 0;
+                            if (!mat || n <= 0) return;
+
+                            var cell = Math.min(width, height) / n;
+                            var ox = (width - cell * n) * 0.5;
+                            var oy = (height - cell * n) * 0.5;
+
+                            for (var r = 0; r < n; r++) {
+                                var row = mat[r];
+                                for (var c = 0; c < n; c++) {
+                                    if (row[c] !== 1) continue;
+
+                                    var px = ox + c * cell;
+                                    var py = oy + r * cell;
+
+                                    // Identify the three 7x7 finder patterns
+                                    var inTL = (r < 7 && c < 7);
+                                    var inTR = (r < 7 && c >= n - 7);
+                                    var inBL = (r >= n - 7 && c < 7);
+
+                                    if (inTL || inTR || inBL) {
+                                        var fr = inBL ? (r - (n - 7)) : r;
+                                        var fc = inTR ? (c - (n - 7)) : c;
+
+                                        if (fr >= 2 && fr <= 4 && fc >= 2 && fc <= 4) {
+                                            // Inner 3x3 Nothing Red core
+                                            ctx.fillStyle = "#D71921";
+                                            ctx.fillRect(px, py, cell * 0.98, cell * 0.98);
+                                        } else {
+                                            // Outer 7x7 crisp black finder ring
+                                            ctx.fillStyle = "#0A0A0C";
+                                            ctx.fillRect(px, py, cell * 0.98, cell * 0.98);
+                                        }
+                                    } else {
+                                        // Nothing Dot-Matrix circular data module
+                                        ctx.fillStyle = "#0A0A0C";
+                                        ctx.beginPath();
+                                        ctx.arc(px + cell * 0.5, py + cell * 0.5, cell * 0.43, 0, Math.PI * 2);
+                                        ctx.fill();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Loading / Error Overlay
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 12
+                        color: Qt.rgba(1, 1, 1, 0.94)
+                        visible: root.loadingWifiQr || !(root.wifiQrData && root.wifiQrData.success)
+
+                        Text {
+                            anchors.centerIn: parent
+                            width: parent.width - 20
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
+                            text: root.loadingWifiQr
+                                ? "GENERATING QR..."
+                                : ((root.wifiQrData && root.wifiQrData.error) ? root.wifiQrData.error : "QR UNAVAILABLE")
+                            font.family: fontNMono.name || "monospace"
+                            font.pixelSize: 9
+                            font.bold: true
+                            color: root.loadingWifiQr ? "#333333" : "#D71921"
+                        }
+                    }
+                }
+
+                // Bottom Password + SHOW / COPY Row
+                Item {
+                    id: qrBottomBar
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 26
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 4
+                        anchors.right: qrActionsRow.left
+                        anchors.rightMargin: 6
+                        anchors.verticalCenter: parent.verticalCenter
+                        elide: Text.ElideRight
+                        text: {
+                            if (!root.wifiQrData || !root.wifiQrData.password) return "PASS · OPEN NETWORK";
+                            if (root.showQrPasswordText) return "PASS · " + root.wifiQrData.password;
+                            return "PASS · ••••••••";
+                        }
+                        font.family: fontNMono.name || "monospace"
+                        font.pixelSize: 9
+                        color: "#CCCCCC"
+                    }
+
+                    Row {
+                        id: qrActionsRow
+                        anchors.right: parent.right
+                        anchors.rightMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+                        visible: root.wifiQrData && root.wifiQrData.password && root.wifiQrData.password !== ""
+
+                        Rectangle {
+                            width: 40
+                            height: 20
+                            radius: 5
+                            color: qrShowMa.containsMouse ? "#282828" : "#181818"
+                            border.width: 1
+                            border.color: root.showQrPasswordText ? "#D71921" : "#333333"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: root.showQrPasswordText ? "HIDE" : "SHOW"
+                                font.family: fontNMono.name || "monospace"
+                                font.pixelSize: 8
+                                font.bold: true
+                                color: root.showQrPasswordText ? "#D71921" : "#CCCCCC"
+                            }
+
+                            MouseArea {
+                                id: qrShowMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.showQrPasswordText = !root.showQrPasswordText
+                            }
+                        }
+
+                        Rectangle {
+                            width: 46
+                            height: 20
+                            radius: 5
+                            color: root.qrPasswordCopied ? "#D71921" : (qrCopyMa.containsMouse ? "#282828" : "#181818")
+                            border.width: 1
+                            border.color: root.qrPasswordCopied ? "#D71921" : "#333333"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: root.qrPasswordCopied ? "COPIED" : "COPY"
+                                font.family: fontNMono.name || "monospace"
+                                font.pixelSize: 8
+                                font.bold: true
+                                color: "#FFFFFF"
+                            }
+
+                            MouseArea {
+                                id: qrCopyMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.copyWifiQrPassword()
                             }
                         }
                     }
