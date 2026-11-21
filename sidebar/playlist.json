@@ -1,5 +1,71 @@
 [
   {
+    "id": "1795243439905",
+    "title": "Killjoy",
+    "artist": "Laur Elle",
+    "album": "Killjoy",
+    "art_url": "https://i.scdn.co/image/ab67616d0000b273aafc7d3d2c8e659b502b1662",
+    "url": "https://open.spotify.com/track/0lCfWsUserNON6DL05WPtH",
+    "spotify_uri": "spotify:track:0lCfWsUserNON6DL05WPtH",
+    "duration": "-2:19",
+    "added_at": 1795243439
+  },
+  {
+    "id": "1795243184620",
+    "title": "The Hit",
+    "artist": "aleksiah",
+    "album": "The Hit",
+    "art_url": "https://i.scdn.co/image/ab67616d0000b273913eddb60055887071ed2547",
+    "url": "https://open.spotify.com/track/34qDToXVITAVaGwyNIV41J",
+    "spotify_uri": "spotify:track:34qDToXVITAVaGwyNIV41J",
+    "duration": "-0:29",
+    "added_at": 1795243184
+  },
+  {
+    "id": "1795242202422",
+    "title": "Too Well",
+    "artist": "Reneé Rapp",
+    "album": "Everything To Everyone",
+    "art_url": "https://i.scdn.co/image/ab67616d0000b2737251a75664414e04757eafe7",
+    "url": "https://open.spotify.com/track/6Szgu8v7CAapag3XuuJX0b",
+    "spotify_uri": "spotify:track:6Szgu8v7CAapag3XuuJX0b",
+    "duration": "-1:48",
+    "added_at": 1795242202
+  },
+  {
+    "id": "1795164350196",
+    "title": "Classy Lady",
+    "artist": "SKYLAR",
+    "album": "Classy Lady",
+    "art_url": "https://i.scdn.co/image/ab67616d0000b27350ad68b2e661c750fcb7c3d0",
+    "url": "https://open.spotify.com/track/6Zs7kd3ZxRWLXfRDf2SGC0",
+    "spotify_uri": "spotify:track:6Zs7kd3ZxRWLXfRDf2SGC0",
+    "duration": "-0:40",
+    "added_at": 1795164350
+  },
+  {
+    "id": "1795163181380",
+    "title": "Sad in Hawaii",
+    "artist": "Claire Rosinkranz",
+    "album": "Just Because",
+    "art_url": "https://i.scdn.co/image/ab67616d0000b27381f4b5f07abc5bde5281cd75",
+    "url": "https://open.spotify.com/track/4ODUXW6HXDdiSmFVzjeKGE",
+    "spotify_uri": "spotify:track:4ODUXW6HXDdiSmFVzjeKGE",
+    "duration": "-1:47",
+    "added_at": 1795163181
+  },
+  {
+    "id": "1795140826101",
+    "title": "Glowing Review",
+    "artist": "Maisie Peters",
+    "album": "Trying: Season 2 (Apple TV+ Original Series Soundtrack)",
+    "art_url": "https://i.scdn.co/image/ab67616d0000b273151a82ae081f0d75060b45f4",
+    "url": "https://open.spotify.com/track/5vCLCt7cU5CgocUj0D1eft",
+    "spotify_uri": "spotify:track:5vCLCt7cU5CgocUj0D1eft",
+    "duration": "-2:08",
+    "added_at": 1795140826
+  },
+  {
     "id": "1795138390416",
     "title": "Not Another Rockstar",
     "artist": "Maisie Peters",
