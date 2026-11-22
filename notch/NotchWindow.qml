@@ -158,6 +158,30 @@ PanelWindow {
     property bool brightnessSyncReady: false
     readonly property int brightnessBodyW: 248
 
+    // ---------------------------------------------------------------------
+    // Delayed Screenshot Countdown Integration (Super + Print)
+    // ---------------------------------------------------------------------
+    property bool showScreenshotCountdown: false
+    property int screenshotCountdownSec: 0
+    property int screenshotCountdownTotal: 5
+    property string screenshotCountdownMode: "FULL"
+    readonly property int countdownBodyW: 238
+
+    IpcHandler {
+        target: "screenshot"
+        function countdown(sec: int, total: int, mode: string): void {
+            root.showVolume = false;
+            root.showBrightness = false;
+            root.screenshotCountdownSec = sec;
+            root.screenshotCountdownTotal = total > 0 ? total : 5;
+            root.screenshotCountdownMode = mode ? mode : "FULL";
+            root.showScreenshotCountdown = true;
+        }
+        function hide(): void {
+            root.showScreenshotCountdown = false;
+        }
+    }
+
     Component.onCompleted: {
         root.queryWifi();
         root.queryBrightness();
@@ -350,6 +374,7 @@ PanelWindow {
         if (showBluetoothMenu) return btBodyW;
         if (showWifiMenu) return wifiBodyW;
         if (showDisplayMenu) return displayBodyW;
+        if (showScreenshotCountdown) return countdownBodyW;
         if (showBrightness) return brightnessBodyW;
         if (showVolume) return volumeBodyW;
         if (showBatteryRage) return rageBodyW;
@@ -1007,8 +1032,8 @@ PanelWindow {
         if (showWifiMenu || showBluetoothMenu) return false;
         // Jangan sembunyikan jika menu Display / HDMI sedang dibuka
         if (showDisplayMenu) return false;
-        // Jangan sembunyikan jika volume atau brightness HUD sedang aktif
-        if (showVolume || showBrightness) return false;
+        // Jangan sembunyikan jika volume, brightness, atau countdown screenshot sedang aktif
+        if (showVolume || showBrightness || showScreenshotCountdown) return false;
         // Force drop-down saat baterai <= 15% (Rage Mode) atau saat charger baru dicolok (Relief Mode)
         if (showBatteryRage || showBatteryRelief) return false;
         // Munculkan jika user mengarahkan kursor ke ujung atas layar / notch (hover-to-peek)
@@ -1172,14 +1197,17 @@ PanelWindow {
         }
 
 
-        // Left-click on notch: snooze if raging, otherwise toggle WiFi menu
+        // Left-click on notch: cancel screenshot countdown, snooze if raging, otherwise toggle WiFi menu
         MouseArea {
             anchors.fill: parent
             enabled: !root.showDisplayMenu && !root.showWifiMenu && !root.showBluetoothMenu && !root.showVolume && !root.showBrightness
             acceptedButtons: Qt.LeftButton
             cursorShape: Qt.PointingHandCursor
             onClicked: {
-                if (root.showBatteryRage) {
+                if (root.showScreenshotCountdown) {
+                    Quickshell.execDetached(["rm", "-f", "/tmp/glyph_screenshot_pid"]);
+                    root.showScreenshotCountdown = false;
+                } else if (root.showBatteryRage) {
                     root.testRageOverride = false;
                     root.isBatterySnoozed = true;
                     batterySnoozeTimer.restart();
@@ -1201,7 +1229,7 @@ PanelWindow {
             anchors.verticalCenterOffset: 1
             spacing: root.eyeGap
 
-            readonly property bool activeView: !root.showVolume && !root.showBrightness && !root.showDisplayMenu && !root.showWifiMenu && !root.showBluetoothMenu && !root.showBatteryRage && !root.showBatteryRelief && !root.showStatusPeek
+            readonly property bool activeView: !root.showScreenshotCountdown && !root.showVolume && !root.showBrightness && !root.showDisplayMenu && !root.showWifiMenu && !root.showBluetoothMenu && !root.showBatteryRage && !root.showBatteryRelief && !root.showStatusPeek
             opacity: activeView ? 1.0 : 0.0
             scale: activeView ? 1.0 : 0.85
             visible: activeView || opacity > 0.05
@@ -1546,7 +1574,7 @@ PanelWindow {
             height: parent.height
             clip: true
 
-            readonly property bool activeView: root.showStatusPeek && !root.showBatteryRage && !root.showBatteryRelief && !root.showVolume && !root.showBrightness && !root.showDisplayMenu && !root.showWifiMenu && !root.showBluetoothMenu
+            readonly property bool activeView: root.showStatusPeek && !root.showScreenshotCountdown && !root.showBatteryRage && !root.showBatteryRelief && !root.showVolume && !root.showBrightness && !root.showDisplayMenu && !root.showWifiMenu && !root.showBluetoothMenu
             opacity: activeView ? 1.0 : 0.0
             scale: activeView ? 1.0 : 0.90
             visible: activeView || opacity > 0.05
@@ -1816,6 +1844,75 @@ PanelWindow {
                 font.family: fontNdot57.name || "Fira Sans"
                 font.letterSpacing: 0.5
                 color: "#FFFFFF"
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // SCREENSHOT COUNTDOWN VIEW: Nothing OS Dot-Matrix Timer HUD
+        // -----------------------------------------------------------------
+        Row {
+            id: screenshotCountdownRow
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 10
+
+            readonly property bool activeView: root.showScreenshotCountdown && !root.showDisplayMenu && !root.showWifiMenu && !root.showBluetoothMenu
+            opacity: activeView ? 1.0 : 0.0
+            scale: activeView ? 1.0 : 0.85
+            visible: activeView || opacity > 0.05
+
+            Behavior on opacity { NumberAnimation { duration: root.animDuration; easing.type: Easing.OutCubic } }
+            Behavior on scale   { NumberAnimation { duration: root.animDuration; easing.type: Easing.OutCubic } }
+
+            // 1. Pulsing Nothing Red Recording Dot
+            Rectangle {
+                width: 8
+                height: 8
+                radius: 4
+                color: "#D71921"
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            // 2. Mode Label (CAP · FULL / CAP · AREA)
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "CAP · " + root.screenshotCountdownMode
+                font.family: fontNMono.name || "monospace"
+                font.pixelSize: 10
+                font.letterSpacing: 0.8
+                color: Qt.rgba(1.0, 1.0, 1.0, 0.78)
+            }
+
+            // 3. 5-Dot Countdown Capsule Bar
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+
+                Repeater {
+                    model: root.screenshotCountdownTotal
+                    Rectangle {
+                        width: 5
+                        height: 8
+                        radius: 2.5
+                        readonly property bool active: (index < root.screenshotCountdownSec)
+                        color: active ? (root.screenshotCountdownSec <= 2 ? "#D71921" : "#FFFFFF") : Qt.rgba(1.0, 1.0, 1.0, 0.18)
+
+                        Behavior on color {
+                            ColorAnimation { duration: 120 }
+                        }
+                    }
+                }
+            }
+
+            // 4. Dot-Matrix Remaining Seconds (Ndot57)
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 28
+                horizontalAlignment: Text.AlignRight
+                text: root.screenshotCountdownSec + "S"
+                font.pixelSize: 14
+                font.family: fontNdot57.name || "monospace"
+                color: root.screenshotCountdownSec <= 2 ? "#D71921" : "#FFFFFF"
             }
         }
 

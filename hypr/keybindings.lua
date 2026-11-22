@@ -63,7 +63,8 @@ hl.bind(mainMod .. " + ALT + down", hl.dsp.window.swap({ direction = "d" }), { d
 -- Actions
 hl.bind(mainMod .. " + CTRL + R", hl.dsp.exec_cmd("hyprctl reload"), { description = "Reload Hyprland configuration" })
 hl.bind(mainMod .. " + SHIFT + A", hl.dsp.exec_cmd("~/.config/hypr/scripts/toggle-animations.sh"), { description = "Toggle animations" })
-hl.bind(mainMod .. " + PRINT", hl.dsp.exec_cmd("~/.config/hypr/scripts/screenshot.sh"), { description = "Take a screenshot" })
+hl.bind(mainMod .. " + PRINT", hl.dsp.exec_cmd("~/.config/hypr/scripts/screenshot-copy.sh --full --delay 5"), { locked = true, description = "Take a 5s delayed full-screen screenshot and copy" })
+hl.bind(mainMod .. " + SHIFT + PRINT", hl.dsp.exec_cmd("~/.config/hypr/scripts/screenshot-copy.sh --area --delay 5"), { description = "Take a 5s delayed area screenshot and copy" })
 hl.bind(mainMod .. " + ALT + F", hl.dsp.exec_cmd("~/.config/hypr/scripts/screenshot-copy.sh --full"), { locked = true, description = "Take an instant full-screen screenshot and copy" })
 hl.bind(mainMod .. " + ALT + S", hl.dsp.exec_cmd("~/.config/hypr/scripts/screenshot-copy.sh --area"), { description = "Take an instant area screenshot and copy" })
 hl.bind(mainMod .. " + ALT + A", hl.dsp.exec_cmd("~/.config/hypr/scripts/text-extractor.sh"), { description = "Extract text from an area" })
