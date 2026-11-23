@@ -16,6 +16,7 @@ PanelWindow {
     WlrLayershell.namespace: "quickshell:notch"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: root.isMenuOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    exclusionMode: WlrLayershell.Ignore
 
     readonly property bool isMenuOpen: showWifiMenu || showBluetoothMenu
     function closeAllMenus(): void {
@@ -28,6 +29,10 @@ PanelWindow {
         windows: [root]
         active: false
         onCleared: {
+            if (root.showDisplayMenu) {
+                displayAutoApplyTimer.stop();
+                root.showDisplayMenu = false;
+            }
             if (root.isMenuOpen) {
                 root.closeAllMenus();
             }
@@ -417,12 +422,13 @@ PanelWindow {
     readonly property int eyeGap: 26
     readonly property int pupilSize: 12
 
-    // Fixed stable window dimensions (mencegah Wayland surface resize jitter)
-    readonly property int windowWidth: 560
-    readonly property int windowHeight: (root.showWifiMenu || root.showBluetoothMenu) ? 350 : (root.showDisplayMenu ? 110 : 96)
-    anchors.top: true
-    implicitWidth: windowWidth
-    implicitHeight: windowHeight
+    // Full-screen transparent layer-shell window; click-through outside notchVisual when menus are closed
+    anchors {
+        top: true
+        bottom: true
+        left: true
+        right: true
+    }
     color: "transparent"
 
 
@@ -1080,12 +1086,28 @@ PanelWindow {
         onTriggered: cursorProc.running = true
     }
 
-    // Only the visible black notch captures clicks/wheel (area transparan di luar notch click-through)
+    // When a menu is open, capture clicks anywhere outside notchVisual to dismiss it (same pattern as Sidebar/Wallpaper)
     mask: Region {
-        x: Math.round(notchVisual.x)
+        x: (root.isMenuOpen || root.showDisplayMenu) ? 0 : Math.round(notchVisual.x)
         y: 0
-        width: Math.round(notchVisual.width)
-        height: root.shouldHide ? 0 : Math.round(notchVisual.height + notchVisual.y)
+        width: (root.isMenuOpen || root.showDisplayMenu) ? root.width : Math.round(notchVisual.width)
+        height: (root.isMenuOpen || root.showDisplayMenu) ? root.height : (root.shouldHide ? 0 : Math.round(notchVisual.height + notchVisual.y))
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        enabled: root.isMenuOpen || root.showDisplayMenu
+        hoverEnabled: false
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+        onClicked: {
+            if (root.showDisplayMenu) {
+                displayAutoApplyTimer.stop();
+                root.showDisplayMenu = false;
+            }
+            if (root.isMenuOpen) {
+                root.closeAllMenus();
+            }
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -1197,16 +1219,21 @@ PanelWindow {
         }
 
 
-        // Left-click on notch: cancel screenshot countdown, snooze if raging, otherwise toggle WiFi menu
+        // Left-click on notch: cancel countdown, close open notch menu, snooze rage, or toggle WiFi menu
         MouseArea {
             anchors.fill: parent
-            enabled: !root.showDisplayMenu && !root.showWifiMenu && !root.showBluetoothMenu && !root.showVolume && !root.showBrightness
+            enabled: !root.showVolume && !root.showBrightness
             acceptedButtons: Qt.LeftButton
             cursorShape: Qt.PointingHandCursor
             onClicked: {
                 if (root.showScreenshotCountdown) {
                     Quickshell.execDetached(["rm", "-f", "/tmp/glyph_screenshot_pid"]);
                     root.showScreenshotCountdown = false;
+                } else if (root.showDisplayMenu) {
+                    displayAutoApplyTimer.stop();
+                    root.showDisplayMenu = false;
+                } else if (root.isMenuOpen) {
+                    root.closeAllMenus();
                 } else if (root.showBatteryRage) {
                     root.testRageOverride = false;
                     root.isBatterySnoozed = true;

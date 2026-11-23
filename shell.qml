@@ -35,36 +35,6 @@ ShellRoot {
         id: topNotch
     }
 
-    // Fullscreen invisible backdrop: click outside or ESC to close Notch menus
-    PanelWindow {
-        id: notchBackdrop
-        WlrLayershell.namespace: "quickshell:notch-backdrop"
-        WlrLayershell.layer: WlrLayer.Top
-        exclusionMode: WlrLayershell.Ignore
-
-        anchors {
-            top: true
-            bottom: true
-            left: true
-            right: true
-        }
-
-        color: "transparent"
-        visible: topNotch.isMenuOpen
-
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: false
-            onClicked: topNotch.closeAllMenus()
-        }
-
-        Shortcut {
-            sequence: "Escape"
-            enabled: topNotch.isMenuOpen
-            onActivated: topNotch.closeAllMenus()
-        }
-    }
-
     SidebarWindow {
         id: musicSidebar
         notifServer: notifPopup
