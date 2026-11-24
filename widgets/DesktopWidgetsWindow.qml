@@ -142,17 +142,28 @@ PanelWindow {
         precision: SystemClock.Minutes
     }
 
-    // Active Media Player via MPRIS
+    // Active Media Player via MPRIS (Always lock to Spotify while Spotify is open)
     readonly property var activePlayer: {
         let players = Mpris.players.values;
-        if (players.length > 0) {
-            for (let i = 0; i < players.length; i++) {
-                if (players[i].playbackState === MprisPlaybackState.Playing)
-                    return players[i];
-            }
-            return players[0];
+        if (!players || players.length === 0) return null;
+
+        // 1. If Spotify is open (playing or paused), always prefer Spotify
+        for (let i = 0; i < players.length; i++) {
+            let p = players[i];
+            let id = (((p.identity || "") + " " + (p.dbusName || "") + " " + (p.desktopEntry || "")).toLowerCase());
+            if (id.indexOf("spotify") !== -1) return p;
         }
-        return null;
+        // 2. Otherwise, prefer any currently playing player
+        for (let i = 0; i < players.length; i++) {
+            if (players[i].playbackState === MprisPlaybackState.Playing)
+                return players[i];
+        }
+        // 3. Otherwise, prefer any player that actually has a track loaded
+        for (let i = 0; i < players.length; i++) {
+            if (players[i].trackTitle && players[i].trackTitle !== "")
+                return players[i];
+        }
+        return players[0];
     }
 
     // =========================================================================

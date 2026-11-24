@@ -113,16 +113,37 @@ PanelWindow {
         return (identity || entry || "MEDIA").toUpperCase();
     }
 
-    // Auto-switch to active player when opened
+    function isSpotifyPlayer(p): bool {
+        if (!p) return false;
+        var str = ((p.identity || "") + " " + (p.dbusName || "") + " " + (p.desktopEntry || "")).toLowerCase();
+        return str.indexOf("spotify") !== -1;
+    }
+
+    // Auto-switch to Spotify if open (playing or paused); otherwise pick playing/non-empty player
     function autoPickActivePlayer(): void {
         if (!playerList || playerList.length === 0) return;
+        for (var s = 0; s < playerList.length; s++) {
+            if (isSpotifyPlayer(playerList[s])) {
+                root.selectedPlayerIdx = s;
+                return;
+            }
+        }
         for (var i = 0; i < playerList.length; i++) {
             if (playerList[i].playbackState === MprisPlaybackState.Playing) {
                 root.selectedPlayerIdx = i;
                 return;
             }
         }
+        for (var j = 0; j < playerList.length; j++) {
+            if (playerList[j].trackTitle && playerList[j].trackTitle !== "") {
+                root.selectedPlayerIdx = j;
+                return;
+            }
+        }
+        root.selectedPlayerIdx = 0;
     }
+
+    onPlayerListChanged: autoPickActivePlayer()
 
     // =========================================================================
     // Pipewire Audio & Brightness Integrations

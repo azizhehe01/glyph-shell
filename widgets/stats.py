@@ -295,16 +295,35 @@ try:
     players = [p.strip() for p in players_raw if p.strip()]
 
     chosen_player = None
+    # 1. Always prefer Spotify while Spotify is open (even if paused)
     for p in players:
-        try:
-            st = subprocess.check_output(
-                ["playerctl", "-p", p, "status"], stderr=subprocess.DEVNULL, timeout=1
-            ).decode("utf-8").strip()
-            if st == "Playing":
-                chosen_player = p
-                break
-        except Exception:
-            pass
+        if "spotify" in p.lower():
+            chosen_player = p
+            break
+    # 2. Otherwise, prefer any currently Playing player
+    if not chosen_player:
+        for p in players:
+            try:
+                st = subprocess.check_output(
+                    ["playerctl", "-p", p, "status"], stderr=subprocess.DEVNULL, timeout=1
+                ).decode("utf-8").strip()
+                if st == "Playing":
+                    chosen_player = p
+                    break
+            except Exception:
+                pass
+    # 3. Otherwise, prefer any player with a track title
+    if not chosen_player:
+        for p in players:
+            try:
+                t = subprocess.check_output(
+                    ["playerctl", "-p", p, "metadata", "xesam:title"], stderr=subprocess.DEVNULL, timeout=1
+                ).decode("utf-8").strip()
+                if t:
+                    chosen_player = p
+                    break
+            except Exception:
+                pass
     if not chosen_player and players:
         chosen_player = players[0]
 

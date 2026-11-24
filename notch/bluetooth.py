@@ -124,6 +124,12 @@ def toggle_bt():
 def connect_bt(mac):
     if not mac:
         return get_bt_status(do_scan=False)
+    # Stop active discovery so radio bandwidth isn't choked during pairing/A2DP setup
+    subprocess.run(["bluetoothctl", "scan", "off"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+    info_out = _run_bt(["info", mac], timeout=2)
+    is_paired = any(line.strip().startswith("Paired:") and "yes" in line.lower() for line in info_out.splitlines())
+    if not is_paired:
+        subprocess.run(["bluetoothctl", "pair", mac], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=12)
     subprocess.run(["bluetoothctl", "trust", mac], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
     subprocess.run(["bluetoothctl", "connect", mac], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
     return get_bt_status(do_scan=False)

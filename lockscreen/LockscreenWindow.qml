@@ -54,7 +54,13 @@ Scope {
                 || id.indexOf("vlc") !== -1 || id.indexOf("mpv") !== -1;
         }
 
-        // 1. Playing dedicated music player (Spotify, etc.)
+        // 1. Always prefer Spotify while Spotify is open (playing or paused)
+        for (var s = 0; s < list.length; s++) {
+            if (list[s] && (((list[s].identity || "") + " " + (list[s].dbusName || "")).toLowerCase().indexOf("spotify") !== -1) && list[s].trackTitle !== "") {
+                return list[s];
+            }
+        }
+        // 2. Playing dedicated music player
         for (var a = 0; a < list.length; a++) {
             if (isMusicApp(list[a]) && list[a].playbackState === MprisPlaybackState.Playing && list[a].trackTitle !== "") {
                 return list[a];
@@ -180,10 +186,17 @@ print(json.dumps({'wp': wp, 'wifi': wifi}))
         sessionLock.locked = true;
     }
 
+    signal wakeRequested()
+
     IpcHandler {
         target: "lockscreen"
         function lock(): void {
             root.lock();
+        }
+        function wake(): void {
+            if (sessionLock.locked) {
+                root.wakeRequested();
+            }
         }
     }
 
@@ -295,6 +308,31 @@ print(json.dumps({'wp': wp, 'wifi': wifi}))
                     anchors.fill: parent
                     focus: true
                     Component.onCompleted: forceActiveFocus()
+
+                    Timer {
+                        id: wakeFocusTimer
+                        interval: 200
+                        repeat: false
+                        onTriggered: keyInputScope.forceActiveFocus()
+                    }
+
+                    Connections {
+                        target: root
+                        function onWakeRequested() {
+                            keyInputScope.forceActiveFocus();
+                            wakeFocusTimer.restart();
+                        }
+                    }
+
+                    Connections {
+                        target: lockSurface
+                        function onActiveChanged() {
+                            if (lockSurface.active) {
+                                keyInputScope.forceActiveFocus();
+                                wakeFocusTimer.restart();
+                            }
+                        }
+                    }
 
                     Keys.onPressed: event => {
                         if (event.key === Qt.Key_Escape) {
