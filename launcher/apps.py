@@ -2,10 +2,75 @@
 import configparser
 import glob
 import json
+import math
 import os
 import re
 import subprocess
 import sys
+import time
+
+HISTORY_FILE = os.path.expanduser("~/.cache/glyph-shell/launcher_history.json")
+HALF_LIFE_DAYS = 7.0
+
+
+def load_history():
+    if not os.path.exists(HISTORY_FILE):
+        return {}
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+            return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def compute_frecency(entry, now_ts):
+    if not isinstance(entry, dict):
+        return 0.0
+    base = float(entry.get("frecency", 0.0))
+    last_used = float(entry.get("last_used", 0.0))
+    if base <= 0.0 or last_used <= 0.0:
+        return 0.0
+    age_sec = max(0.0, now_ts - last_used)
+    age_days = age_sec / 86400.0
+    score = base * math.pow(0.5, age_days / HALF_LIFE_DAYS)
+    # Short-term recency bump so newly launched items stay effortless to re-open
+    if age_sec < 3600:
+        score += 4.0
+    elif age_sec < 86400:
+        score += 2.0
+    return round(score, 3)
+
+
+def record_launch(item_id):
+    if not item_id:
+        return
+    now_ts = time.time()
+    hist = load_history()
+    prev = hist.get(item_id, {})
+    prev_base = float(prev.get("frecency", 0.0)) if isinstance(prev, dict) else 0.0
+    prev_ts = float(prev.get("last_used", 0.0)) if isinstance(prev, dict) else 0.0
+    prev_count = int(prev.get("count", 0)) if isinstance(prev, dict) else 0
+
+    decayed = 0.0
+    if prev_base > 0.0 and prev_ts > 0.0:
+        age_days = max(0.0, now_ts - prev_ts) / 86400.0
+        decayed = prev_base * math.pow(0.5, age_days / HALF_LIFE_DAYS)
+
+    hist[item_id] = {
+        "count": prev_count + 1,
+        "last_used": now_ts,
+        "frecency": round(decayed + 10.0, 3),
+    }
+
+    try:
+        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+        tmp_path = HISTORY_FILE + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(hist, f, indent=2)
+        os.replace(tmp_path, HISTORY_FILE)
+    except Exception:
+        pass
 
 ICON_DIRS = [
     os.path.expanduser("~/.local/share/icons/hicolor/scalable/apps"),
@@ -87,7 +152,11 @@ PRIORITY_APPS = [
 ]
 
 
-def load_apps():
+def load_apps(history=None, now_ts=None):
+    if history is None:
+        history = load_history()
+    if now_ts is None:
+        now_ts = time.time()
     app_dirs = [
         os.path.expanduser("~/.local/share/applications"),
         "/var/lib/flatpak/exports/share/applications",
@@ -140,7 +209,10 @@ def load_apps():
                         prio = idx
                         break
 
+                item_id = f"app:{key}"
+                frec = compute_frecency(history.get(item_id), now_ts)
                 apps.append({
+                    "id": item_id,
                     "type": "app",
                     "name": shorten_app_name(name),
                     "fullName": name,
@@ -150,15 +222,20 @@ def load_apps():
                     "path": "",
                     "searchKey": f"{name} {shorten_app_name(name)} {keywords}".lower(),
                     "priority": prio,
+                    "frecency": frec,
                 })
             except Exception:
                 continue
 
-    apps.sort(key=lambda x: (x["priority"], x["name"].lower()))
+    apps.sort(key=lambda x: (-x["frecency"], x["priority"], x["name"].lower()))
     return apps
 
 
-def load_project_folders():
+def load_project_folders(history=None, now_ts=None):
+    if history is None:
+        history = load_history()
+    if now_ts is None:
+        now_ts = time.time()
     home = os.path.expanduser("~")
     folder_Svg = "file://" + os.path.expanduser(
         "~/.config/quickshell/DesktopWidgetsApp/assets/folder-dot.svg"
@@ -205,7 +282,10 @@ def load_project_folders():
             return
         seen_paths.add(real)
         rel = full_path.replace(home, "~")
+        item_id = f"folder:{real}"
+        frec = compute_frecency(history.get(item_id), now_ts)
         folders.append({
+            "id": item_id,
             "type": "folder",
             "name": display_name,
             "fullName": rel,
@@ -215,6 +295,7 @@ def load_project_folders():
             "path": full_path,
             "searchKey": f"{display_name} {rel} folder project ide repo".lower(),
             "priority": prio,
+            "frecency": frec,
         })
 
     for idx, (pname, ppath) in enumerate(pinned_paths):
@@ -246,17 +327,20 @@ def load_project_folders():
             is_git = os.path.isdir(os.path.join(p, ".git"))
             add_folder(entry, p, prio=15 if is_git else 30)
 
-    folders.sort(key=lambda x: (x["priority"], x["name"].lower()))
+    folders.sort(key=lambda x: (-x["frecency"], x["priority"], x["name"].lower()))
     return folders
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "list"
     if cmd == "list":
-        items = load_apps() + load_project_folders()
+        now_ts = time.time()
+        hist = load_history()
+        items = load_apps(hist, now_ts) + load_project_folders(hist, now_ts)
         print(json.dumps(items))
     elif cmd == "open-folder" and len(sys.argv) > 2:
         folder_path = sys.argv[2]
+        record_launch(f"folder:{os.path.realpath(folder_path)}")
         ide_bin = "/opt/antigravity/antigravity-ide"
         if not os.path.exists(ide_bin):
             ide_bin = "antigravity"
@@ -268,6 +352,8 @@ if __name__ == "__main__":
         )
     elif cmd == "run-app" and len(sys.argv) > 2:
         exec_str = sys.argv[2]
+        item_id = sys.argv[3] if len(sys.argv) > 3 else f"app:{exec_str.lower()}"
+        record_launch(item_id)
         subprocess.Popen(
             ["bash", "-c", exec_str],
             stdout=subprocess.DEVNULL,

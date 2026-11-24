@@ -140,7 +140,17 @@ PanelWindow {
         }
 
         matches.sort(function(a, b) {
+            if (!q) {
+                var fa = Number(a.item.frecency || 0);
+                var fb = Number(b.item.frecency || 0);
+                if (fa !== fb) return fb - fa;
+                if (a.score !== b.score) return a.score - b.score;
+                return (a.item.name || "").localeCompare(b.item.name || "");
+            }
             if (a.score !== b.score) return a.score - b.score;
+            var qfa = Number(a.item.frecency || 0);
+            var qfb = Number(b.item.frecency || 0);
+            if (qfa !== qfb) return qfb - qfa;
             return (a.item.name || "").localeCompare(b.item.name || "");
         });
 
@@ -189,7 +199,8 @@ PanelWindow {
                 "python3",
                 Quickshell.shellDir + "/launcher/apps.py",
                 "run-app",
-                it.exec
+                it.exec,
+                it.id || ""
             ]);
         }
         root.close();
