@@ -145,7 +145,6 @@ fi
 
 # Wallpaper cache symlink
 WP_CACHE="$HOME/.cache/glyph-shell/current_wallpaper"
-[[ ! -f "$WP_CACHE" ]] && WP_CACHE="$HOME/.cache/ml4w/hyprland-dotfiles/current_wallpaper"
 if [[ -f "$WP_CACHE" ]]; then
     WP_PATH="$(tr -d '\r\n' < "$WP_CACHE")"
     if [[ -f "$WP_PATH" ]]; then

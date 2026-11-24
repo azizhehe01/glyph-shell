@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
 glyph-shell Native Wallpaper Engine & Manager
-Replaces ml4w-wallpaper-app and ml4w-wallpaper with a standalone, fast,
-Nothing OS 3.0 / glyph-shell native implementation.
+Standalone, fast, Nothing OS 3.0 / glyph-shell native wallpaper manager.
 
 Features:
 - Dedicated wallpaper directory: ~/.config/quickshell/DesktopWidgetsApp/wallpapers
-- Automatic one-time migration from ~/.config/ml4w/wallpapers if needed
 - Fast 16:9 thumbnail caching in ~/.cache/glyph-shell/thumbs/
 - Instant 60fps Live Preview via awww / swww / hyprpaper
-- Full ecosystem sync on apply (glyph-shell frosted glass, hyprlock, matugen)
+- Full ecosystem sync on apply (glyph-shell frosted glass, lockscreen, matugen)
 """
 
 import glob
@@ -26,17 +24,12 @@ from PIL import Image
 SHELL_DIR = os.path.expanduser("~/.config/quickshell/DesktopWidgetsApp")
 PRIMARY_WP_DIR = os.path.join(SHELL_DIR, "wallpapers")
 USER_PICTURES_WP_DIR = os.path.expanduser("~/Pictures/Wallpapers")
-LEGACY_ML4W_WP_DIR = os.path.expanduser("~/.config/ml4w/wallpapers")
 
 GLYPH_CACHE_DIR = os.path.expanduser("~/.cache/glyph-shell")
 THUMBS_DIR = os.path.join(GLYPH_CACHE_DIR, "thumbs")
 GLYPH_CURRENT_WP = os.path.join(GLYPH_CACHE_DIR, "current_wallpaper")
+GLYPH_BLURRED_WP = os.path.join(GLYPH_CACHE_DIR, "blurred_wallpaper.png")
 ASCII_STATE_FILE = os.path.join(GLYPH_CACHE_DIR, "ascii_state.json")
-
-# Legacy compatibility paths so other tools/configs never break
-ML4W_CACHE_DIR = os.path.expanduser("~/.cache/ml4w/hyprland-dotfiles")
-ML4W_CURRENT_WP = os.path.join(ML4W_CACHE_DIR, "current_wallpaper")
-ML4W_BLURRED_WP = os.path.join(ML4W_CACHE_DIR, "blurred_wallpaper.png")
 LOCK_SYMLINK = "/tmp/nothing_lock_wallpaper"
 
 VALID_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -45,41 +38,22 @@ VALID_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 def ensure_dirs_and_migrate():
     os.makedirs(PRIMARY_WP_DIR, exist_ok=True)
     os.makedirs(THUMBS_DIR, exist_ok=True)
-    os.makedirs(ML4W_CACHE_DIR, exist_ok=True)
-
-    # Auto-migrate wallpapers from ~/.config/ml4w/wallpapers if PRIMARY_WP_DIR is empty
-    existing = [
-        f for f in os.listdir(PRIMARY_WP_DIR)
-        if os.path.splitext(f)[1].lower() in VALID_EXTS
-    ]
-    if not existing and os.path.isdir(LEGACY_ML4W_WP_DIR):
-        try:
-            for fname in os.listdir(LEGACY_ML4W_WP_DIR):
-                ext = os.path.splitext(fname)[1].lower()
-                if ext in VALID_EXTS:
-                    src = os.path.join(LEGACY_ML4W_WP_DIR, fname)
-                    dst = os.path.join(PRIMARY_WP_DIR, fname)
-                    if os.path.isfile(src) and not os.path.exists(dst):
-                        shutil.copy2(src, dst)
-        except Exception:
-            pass
+    os.makedirs(GLYPH_CACHE_DIR, exist_ok=True)
 
 
 def get_current_wallpaper():
-    for cache_f in (GLYPH_CURRENT_WP, ML4W_CURRENT_WP):
-        if os.path.exists(cache_f):
-            try:
-                with open(cache_f, "r") as f:
-                    p = f.read().strip()
-                if p and os.path.exists(p):
-                    # If it points to legacy folder and exists in primary folder, prefer primary
-                    bname = os.path.basename(p)
-                    primary_cand = os.path.join(PRIMARY_WP_DIR, bname)
-                    if os.path.exists(primary_cand):
-                        return primary_cand
-                    return p
-            except Exception:
-                pass
+    if os.path.exists(GLYPH_CURRENT_WP):
+        try:
+            with open(GLYPH_CURRENT_WP, "r") as f:
+                p = f.read().strip()
+            if p and os.path.exists(p):
+                bname = os.path.basename(p)
+                primary_cand = os.path.join(PRIMARY_WP_DIR, bname)
+                if os.path.exists(primary_cand):
+                    return primary_cand
+                return p
+        except Exception:
+            pass
 
     for daemon_cmd in ("awww", "swww"):
         if shutil.which(daemon_cmd):
@@ -617,13 +591,12 @@ def set_display_wallpaper(img_path, transition="fade", duration="0.45", angle="3
 def update_blurred_and_ecosystem(img_path):
     ensure_dirs_and_migrate()
 
-    # 1. Record active wallpaper in glyph-shell and legacy ml4w cache
-    for target_file in (GLYPH_CURRENT_WP, ML4W_CURRENT_WP):
-        try:
-            with open(target_file, "w") as f:
-                f.write(img_path + "\n")
-        except Exception:
-            pass
+    # 1. Record active wallpaper in glyph-shell cache
+    try:
+        with open(GLYPH_CURRENT_WP, "w") as f:
+            f.write(img_path + "\n")
+    except Exception:
+        pass
 
     # 2. Update lockscreen wallpaper symlink (/tmp/nothing_lock_wallpaper)
     try:
@@ -637,10 +610,10 @@ def update_blurred_and_ecosystem(img_path):
     try:
         src_sig = f"{img_path}:{int(os.path.getmtime(img_path))}:v5"
         wp_hash = hashlib.md5(src_sig.encode("utf-8")).hexdigest()[:10]
-        custom_blurred_wp = f"/tmp/ml4w_widget_frost_{wp_hash}.jpg"
+        custom_blurred_wp = f"/tmp/glyph_widget_frost_{wp_hash}.jpg"
 
         if not os.path.exists(custom_blurred_wp):
-            for old_f in glob.glob("/tmp/ml4w_widget_frost_*.jpg"):
+            for old_f in glob.glob("/tmp/glyph_widget_frost_*.jpg"):
                 try:
                     os.remove(old_f)
                 except Exception:
@@ -669,7 +642,7 @@ def update_blurred_and_ecosystem(img_path):
                     im_blur.save(custom_blurred_wp, "JPEG", quality=85)
 
         if os.path.exists(custom_blurred_wp):
-            shutil.copy2(custom_blurred_wp, ML4W_BLURRED_WP)
+            shutil.copy2(custom_blurred_wp, GLYPH_BLURRED_WP)
     except Exception:
         pass
 

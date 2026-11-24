@@ -12,16 +12,15 @@ import urllib.parse
 import urllib.request
 from PIL import Image
 
-cache_file = "/tmp/ml4w_desktop_widgets_cache.json"
-lyrics_cache_file = "/tmp/ml4w_desktop_lyrics_cache_v2.json"
+cache_file = "/tmp/glyph_desktop_widgets_cache.json"
+lyrics_cache_file = "/tmp/glyph_desktop_lyrics_cache_v2.json"
 now = time.time()
 data = {}
 
-# 0. Universal Wallpaper Detection (glyph-shell, ML4W, awww, swww, waypaper, hyprpaper)
+# 0. Universal Wallpaper Detection (glyph-shell, awww, swww, waypaper, hyprpaper)
 def detect_active_wallpaper():
     for wp_cache in (
         os.path.expanduser("~/.cache/glyph-shell/current_wallpaper"),
-        os.path.expanduser("~/.cache/ml4w/hyprland-dotfiles/current_wallpaper"),
     ):
         if os.path.exists(wp_cache):
             try:
@@ -60,7 +59,7 @@ def detect_active_wallpaper():
 
     return ""
 
-cache_dir = os.path.expanduser("~/.cache/ml4w/hyprland-dotfiles")
+cache_dir = os.path.expanduser("~/.cache/glyph-shell")
 blurred_wp = os.path.join(cache_dir, "blurred_wallpaper.png")
 raw_wp = detect_active_wallpaper()
 
@@ -68,11 +67,11 @@ custom_blurred_wp = ""
 if raw_wp:
     src_sig = f"{raw_wp}:{int(os.path.getmtime(raw_wp))}:v5"
     wp_hash = hashlib.md5(src_sig.encode("utf-8")).hexdigest()[:10]
-    custom_blurred_wp = f"/tmp/ml4w_widget_frost_{wp_hash}.jpg"
+    custom_blurred_wp = f"/tmp/glyph_widget_frost_{wp_hash}.jpg"
 
     if not os.path.exists(custom_blurred_wp):
         try:
-            for old_f in glob.glob("/tmp/ml4w_widget_frost_*.jpg"):
+            for old_f in glob.glob("/tmp/glyph_widget_frost_*.jpg"):
                 try:
                     os.remove(old_f)
                 except Exception:

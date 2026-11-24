@@ -79,8 +79,6 @@ hl.bind(mainMod .. " + CTRL + B", hl.dsp.exec_cmd("qs -p ~/.config/quickshell/De
 hl.bind(mainMod .. " + SHIFT + R", hl.dsp.exec_cmd("~/.config/hypr/scripts/loadconfig.sh"), { description = "Reload hyprland config" })
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("qs -p ~/.config/quickshell/DesktopWidgetsApp ipc call clipboard toggle"), { description = "Toggle Clipboard History (glyph-shell)" })
 hl.bind(mainMod .. " + CTRL + S", hl.dsp.exec_cmd("qs -p ~/.config/quickshell/DesktopWidgetsApp ipc call sidebar toggle"), { description = "Toggle Music Sidebar Drawer" })
-hl.bind(mainMod .. " + CTRL + C", hl.dsp.exec_cmd("qs ipc call calendar toggle"), { description = "Open ML4W Calendar widget" })
-hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("qs ipc call statusbar focus"), { description = "Expand statusbar and focus it for keyboard navigation" })
 hl.bind(mainMod .. " + ALT + G", hl.dsp.exec_cmd("~/.config/hypr/scripts/gamemode.sh"), { description = "Toggle game mode" })
 hl.bind(mainMod .. " + CTRL + L", hl.dsp.exec_cmd("~/.config/quickshell/DesktopWidgetsApp/lockscreen/lock.sh"), { description = "Lock Screen (Nothing OS)" })
 hl.bind(mainMod .. " + Tab", hl.dsp.exec_cmd("qs -p ~/.config/quickshell/DesktopWidgetsApp ipc call overview toggle"), { description = "Open Select Window Menu" })

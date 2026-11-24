@@ -47,7 +47,7 @@ def get_battery():
 def get_date_weather():
     date_str = time.strftime("%a, %d %b %Y").upper()
     temp_str = "28°C"
-    cache_file = "/tmp/ml4w_desktop_widgets_cache.json"
+    cache_file = "/tmp/glyph_desktop_widgets_cache.json"
     if os.path.exists(cache_file):
         try:
             with open(cache_file, "r") as f:

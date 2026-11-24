@@ -117,7 +117,7 @@ Scope {
         command: ["python3", "-c", "
 import glob, json, os, subprocess
 wp = ''
-frosted = sorted(glob.glob('/tmp/ml4w_widget_frost_*.jpg'), key=os.path.getmtime, reverse=True)
+frosted = sorted(glob.glob('/tmp/glyph_widget_frost_*.jpg'), key=os.path.getmtime, reverse=True)
 if frosted:
     wp = frosted[0]
 elif os.path.exists('/tmp/nothing_lock_wallpaper'):
