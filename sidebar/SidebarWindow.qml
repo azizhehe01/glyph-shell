@@ -792,24 +792,41 @@ PanelWindow {
                     anchors.margins: 14
                     spacing: 14
 
-                    // Album / Video Thumbnail
-                    Rectangle {
+                    // Album / Video Thumbnail (true rounded corners via OpacityMask)
+                    Item {
                         width: 82
                         height: 82
-                        radius: 14
-                        color: Qt.rgba(0, 0, 0, 0.4)
-                        clip: true
 
-                        Image {
+                        Rectangle {
+                            id: sidebarArtMask
                             anchors.fill: parent
-                            source: (root.stats && root.stats.album_art && root.stats.album_art !== "")
-                                ? root.stats.album_art
-                                : ((root.activePlayer && root.activePlayer.trackArtUrl)
-                                    ? root.activePlayer.trackArtUrl
-                                    : Qt.resolvedUrl("../assets/album.jpg"))
-                            fillMode: Image.PreserveAspectCrop
-                            smooth: true
-                            mipmap: true
+                            radius: 14
+                            visible: false
+                        }
+
+                        Item {
+                            anchors.fill: parent
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: sidebarArtMask
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                color: Qt.rgba(0, 0, 0, 0.4)
+                            }
+
+                            Image {
+                                anchors.fill: parent
+                                source: (root.stats && root.stats.album_art && root.stats.album_art !== "")
+                                    ? root.stats.album_art
+                                    : ((root.activePlayer && root.activePlayer.trackArtUrl)
+                                        ? root.activePlayer.trackArtUrl
+                                        : Qt.resolvedUrl("../assets/album.jpg"))
+                                fillMode: Image.PreserveAspectCrop
+                                smooth: true
+                                mipmap: true
+                            }
                         }
 
                         Rectangle {
