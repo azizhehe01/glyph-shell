@@ -68,26 +68,34 @@ def refresh_workspace_state(sock_path):
         except Exception:
             w_cnt = 0
 
-    # If the active workspace has 0 windows, guarantee active_class is "none"
-    if w_cnt <= 0:
-        with lock:
-            workspace_windows = 0
-            active_class = "none"
-        return
-
-    # Otherwise check active window class
+    # Check active window (also covers windows inside a visible special/scratchpad workspace)
     cls_val = "none"
+    win_ws_name = ""
     out_win = query_cmd(sock_path, "j/activewindow")
     if out_win:
         try:
             j = json.loads(out_win)
             c = j.get("class", "none") or "none"
             cls_val = c if c else "none"
+            ws_obj = j.get("workspace")
+            if isinstance(ws_obj, dict):
+                win_ws_name = ws_obj.get("name", "") or ""
         except Exception:
             cls_val = "none"
+            win_ws_name = ""
+
+    in_special = win_ws_name.startswith("special:") and cls_val != "none"
+
+    # If the active workspace has 0 windows and no special/scratchpad window is active,
+    # guarantee active_class is "none"
+    if w_cnt <= 0 and not in_special:
+        with lock:
+            workspace_windows = 0
+            active_class = "none"
+        return
 
     with lock:
-        workspace_windows = w_cnt
+        workspace_windows = max(w_cnt, 1) if in_special else w_cnt
         active_class = cls_val
 
 
@@ -114,6 +122,8 @@ def event_listener(sock2_path, sock_path):
                         "focusedmon>>",
                         "movewindow>>",
                         "movewindowv2>>",
+                        "activespecial>>",
+                        "activespecialv2>>",
                         "closelayer>>",
                     )
                 ):
