@@ -73,22 +73,22 @@ def record_launch(item_id):
         pass
 
 ICON_DIRS = [
-    os.path.expanduser("~/.local/share/icons/hicolor/scalable/apps"),
     os.path.expanduser("~/.local/share/icons/hicolor/256x256/apps"),
     os.path.expanduser("~/.local/share/icons/hicolor/128x128/apps"),
+    os.path.expanduser("~/.local/share/icons/hicolor/scalable/apps"),
     os.path.expanduser("~/.local/share/icons/hicolor/64x64/apps"),
     os.path.expanduser("~/.local/share/icons/hicolor/48x48/apps"),
     os.path.expanduser("~/.local/share/icons"),
-    "/usr/share/icons/hicolor/scalable/apps",
     "/usr/share/icons/hicolor/256x256/apps",
     "/usr/share/icons/hicolor/128x128/apps",
+    "/usr/share/icons/hicolor/scalable/apps",
     "/usr/share/icons/hicolor/64x64/apps",
     "/usr/share/icons/hicolor/48x48/apps",
     "/usr/share/icons/Adwaita/scalable/apps",
     "/usr/share/icons/Adwaita/symbolic/apps",
     "/usr/share/pixmaps",
-    "/var/lib/flatpak/exports/share/icons/hicolor/scalable/apps",
     "/var/lib/flatpak/exports/share/icons/hicolor/128x128/apps",
+    "/var/lib/flatpak/exports/share/icons/hicolor/scalable/apps",
 ]
 
 ICON_CACHE = {}

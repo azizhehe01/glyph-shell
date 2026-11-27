@@ -86,6 +86,19 @@ PanelWindow {
                 "             ▒░    ░▒             ",
                 "             ▒▓▓▓▓▓▓▒             "
             ]
+        },
+        {
+            id: "jolenta-orb",
+            title: "JOLENTA · ORB",
+            res: "480×270 · WIND MASK",
+            tag: "ANIME WIND",
+            art: [
+                "        *     .    ✦     /        ",
+                "               ▒██▒               ",
+                "              ▓████▓░             ",
+                "           ░░▒██████▓▓▒░          ",
+                "       ░░░░▒▒▓▓████▓▓▓▒▒░░░       "
+            ]
         }
     ]
 

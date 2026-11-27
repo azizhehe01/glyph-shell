@@ -42,7 +42,11 @@ PanelWindow {
     readonly property string currentPreset: (root.previewActive && root.previewPreset !== "")
         ? root.previewPreset
         : root.activePreset
-    readonly property int currentPresetId: (root.currentPreset === "diamond-ring") ? 7 : 6
+    readonly property int currentPresetId: {
+        if (root.currentPreset === "jolenta-orb") return 8;
+        if (root.currentPreset === "diamond-ring") return 7;
+        return 6;
+    }
     readonly property string currentBgColor: (root.previewActive && root.previewBgColor !== "")
         ? root.previewBgColor
         : root.activeBgColor
@@ -195,6 +199,23 @@ PanelWindow {
         cache: false
     }
 
+    // GPU Texture 3 & 4: Jolenta (Orb) 16:9 Illustration + RGB Wind Motion Mask
+    Image {
+        id: jolentaImage
+        source: Qt.resolvedUrl("jolenta_16x9.png")
+        visible: false
+        smooth: true
+        cache: true
+    }
+
+    Image {
+        id: jolentaMaskImage
+        source: Qt.resolvedUrl("jolenta_mask.png")
+        visible: false
+        smooth: true
+        cache: true
+    }
+
     // 100% Pure GPU Fragment Shader Renderer (SPIR-V / GLSL via Qt6 RHI)
     Loader {
         id: shaderLoader
@@ -215,6 +236,8 @@ PanelWindow {
             property color bgColor: root.currentBgColor
             property variant fontAtlas: fontAtlasImage
             property variant wallpaperTex: currentWallpaperImage
+            property variant jolentaTex: jolentaImage
+            property variant jolentaMaskTex: jolentaMaskImage
 
             fragmentShader: Qt.resolvedUrl("ascii_wallpaper_v6.frag.qsb")
         }

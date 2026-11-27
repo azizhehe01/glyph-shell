@@ -68,34 +68,42 @@ def refresh_workspace_state(sock_path):
         except Exception:
             w_cnt = 0
 
-    # Check active window (also covers windows inside a visible special/scratchpad workspace)
+    # Check whether a special/scratchpad workspace is ACTUALLY open on the focused monitor
+    active_special = ""
+    out_mons = query_cmd(sock_path, "j/monitors")
+    if out_mons and '"specialWorkspace"' in out_mons:
+        try:
+            mons = json.loads(out_mons)
+            if isinstance(mons, list) and mons:
+                focused_mon = next((m for m in mons if m.get("focused")), mons[0])
+                sw = focused_mon.get("specialWorkspace") or {}
+                active_special = sw.get("name", "") or ""
+        except Exception:
+            active_special = ""
+
+    has_visible_special = bool(active_special)
+
+    # If the active workspace has 0 windows and no special workspace is visibly open,
+    # guarantee active_class is "none" (ignoring any stale hidden scratchpad activewindow)
+    if w_cnt <= 0 and not has_visible_special:
+        with lock:
+            workspace_windows = 0
+            active_class = "none"
+        return
+
+    # Otherwise check active window class
     cls_val = "none"
-    win_ws_name = ""
     out_win = query_cmd(sock_path, "j/activewindow")
     if out_win:
         try:
             j = json.loads(out_win)
             c = j.get("class", "none") or "none"
             cls_val = c if c else "none"
-            ws_obj = j.get("workspace")
-            if isinstance(ws_obj, dict):
-                win_ws_name = ws_obj.get("name", "") or ""
         except Exception:
             cls_val = "none"
-            win_ws_name = ""
-
-    in_special = win_ws_name.startswith("special:") and cls_val != "none"
-
-    # If the active workspace has 0 windows and no special/scratchpad window is active,
-    # guarantee active_class is "none"
-    if w_cnt <= 0 and not in_special:
-        with lock:
-            workspace_windows = 0
-            active_class = "none"
-        return
 
     with lock:
-        workspace_windows = max(w_cnt, 1) if in_special else w_cnt
+        workspace_windows = max(w_cnt, 1) if has_visible_special else w_cnt
         active_class = cls_val
 
 

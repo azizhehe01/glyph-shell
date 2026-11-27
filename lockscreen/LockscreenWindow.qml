@@ -254,7 +254,7 @@ print(json.dumps({'wp': wp, 'wifi': wifi}))
                     running: sessionLock.locked && root.asciiEnabled
                 }
 
-                // 1A. Live GPU SILENT BLADE Background (when ASCII mode is active)
+                // 1A. Live GPU ASCII Background (when ASCII mode is active)
                 ShaderEffect {
                     anchors.fill: parent
                     visible: root.asciiEnabled && root.asciiWallpaperRef && root.asciiWallpaperRef.shaderReady
@@ -269,6 +269,8 @@ print(json.dumps({'wp': wp, 'wifi': wifi}))
                     property color bgColor: root.activeBgColor
                     property variant fontAtlas: lockAtlasFallback
                     property variant wallpaperTex: lockAtlasFallback
+                    property variant jolentaTex: lockJolentaImage
+                    property variant jolentaMaskTex: lockJolentaMaskImage
 
                     fragmentShader: Qt.resolvedUrl("../wallpaper/ascii_wallpaper_v6.frag.qsb")
                 }
@@ -277,6 +279,22 @@ print(json.dumps({'wp': wp, 'wifi': wifi}))
                     id: lockAtlasFallback
                     source: root.asciiWallpaperRef ? root.asciiWallpaperRef.atlasSource : ""
                     visible: false
+                }
+
+                Image {
+                    id: lockJolentaImage
+                    source: Qt.resolvedUrl("../wallpaper/jolenta_16x9.png")
+                    visible: false
+                    smooth: true
+                    cache: true
+                }
+
+                Image {
+                    id: lockJolentaMaskImage
+                    source: Qt.resolvedUrl("../wallpaper/jolenta_mask.png")
+                    visible: false
+                    smooth: true
+                    cache: true
                 }
 
                 // 1B. Blurred Desktop Image Background (when Image mode is active)

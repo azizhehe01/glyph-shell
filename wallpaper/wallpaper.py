@@ -178,7 +178,7 @@ def sanitize_hex_color(val, fallback="#07080A"):
     return fallback
 
 
-VALID_ASCII_PRESETS = {"silent-blade", "diamond-ring"}
+VALID_ASCII_PRESETS = {"silent-blade", "diamond-ring", "jolenta-orb"}
 
 
 def sanitize_ascii_preset(val, fallback="silent-blade"):
@@ -431,6 +431,36 @@ def render_ascii_lock_wallpaper(preset: str = None):
                         continue
                     col = red_col if (d2 < 210 and idx >= len(ramp) - 2) else (bright_col if idx >= len(ramp) - 3 else dim_col)
                     draw.text((px, py), ramp[idx], fill=col, font=fnt, anchor="mm")
+
+        elif preset == "jolenta-orb":
+            jolenta_img_path = os.path.join(SHELL_DIR, "wallpaper", "jolenta_16x9.png")
+            if os.path.isfile(jolenta_img_path):
+                with Image.open(jolenta_img_path) as jim:
+                    j_rgb = jim.convert("RGB").resize((480, 270), Image.Resampling.BILINEAR)
+                    j_px = j_rgb.load()
+                    out_px = img.load()
+                    for gy in range(270):
+                        for gx in range(480):
+                            sr, sg, sb = j_px[gx, gy]
+                            rl = (0.299 * sr + 0.587 * sg + 0.114 * sb) / 255.0
+                            if rl < 0.045:
+                                continue
+                            lvl = 1 + min(3, int(rl * 3.99))
+                            for sy in range(4):
+                                for sx in range(4):
+                                    sub_x = sx // 2
+                                    sub_y = sy // 2
+                                    on = False
+                                    if lvl >= 4:
+                                        on = True
+                                    elif lvl == 3:
+                                        on = not (sub_x == 1 and sub_y == 1)
+                                    elif lvl == 2:
+                                        on = ((sub_x + sub_y) % 2 == 0)
+                                    else:
+                                        on = (sub_x == 0 and sub_y == 0)
+                                    if on:
+                                        out_px[gx * 4 + sx, gy * 4 + sy] = (sr, sg, sb)
 
         elif preset == "wallpaper-ascii":
             ramp = "  .:-=+*#%@"

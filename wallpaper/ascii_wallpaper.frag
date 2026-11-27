@@ -18,6 +18,8 @@ layout(std140, binding = 0) uniform buf {
 
 layout(binding = 1) uniform sampler2D fontAtlas;
 layout(binding = 2) uniform sampler2D wallpaperTex;
+layout(binding = 3) uniform sampler2D jolentaTex;
+layout(binding = 4) uniform sampler2D jolentaMaskTex;
 
 int mapVortexGlyph(int stepIdx) {
     if (stepIdx == 1) return 1;
@@ -646,6 +648,122 @@ void main() {
         }
 
         fragColor = vec4(bgCol, 1.0) * ubuf.qt_Opacity;
+        return;
+    } else if (ubuf.presetId == 8) {
+        // PRESET 8: JOLENTA · ORB (480x270 Painterly Shade-Block ASCII + Masked UV Wind + Shooting Star)
+        vec2 jGrid = vec2(480.0, 270.0);
+        vec2 jGridPos = qt_TexCoord0 * jGrid;
+        vec2 jCellIdx = floor(jGridPos);
+        vec2 jCellUV = fract(jGridPos);
+        vec2 jCenterUV = (jCellIdx + 0.5) / jGrid;
+
+        // Cursor local wind gust interaction
+        vec2 cursorUV = cursorPx / res;
+        vec2 dCur = (jCenterUV - cursorUV) * vec2(aspect, 1.0);
+        float cursorGust = smoothstep(0.28, 0.0, length(dCur)) * (0.45 + energy * 0.65);
+
+        // Read motion mask: R = billowing cape, G = hair (bangs & braid), B = golden wheat field
+        vec3 m = texture(jolentaMaskTex, jCenterUV).rgb;
+
+        // 1. Cape billowing wave (propagates from shoulder anchor toward trailing right hem)
+        float capePhase = (jCenterUV.x * 11.5 + jCenterUV.y * 5.2) - t * 3.35;
+        float capeWave = sin(capePhase) * 0.62
+                       + sin(capePhase * 2.05 + 1.3) * 0.26
+                       + (vnoise(jCenterUV * 8.5 - vec2(t * 1.5, t * 0.55)) - 0.5) * 0.34;
+        vec2 capeDisp = vec2(
+            capeWave * 0.0105,
+            -capeWave * 0.0155 + sin(capePhase * 1.45 + 0.7) * 0.0055
+        ) * m.r * (1.0 + cursorGust * 0.55);
+
+        // 2. Hair strand breeze flutter (faster, finer motion on bangs & braid; 0 on face/eyes)
+        float hairPhase = (jCenterUV.y * 29.0 + jCenterUV.x * 14.5) - t * 5.1;
+        float hairWave = sin(hairPhase) * 0.66 + sin(hairPhase * 1.85 + 2.1) * 0.34;
+        vec2 hairDisp = vec2(-hairWave * 0.0046, hairWave * 0.0030) * m.g * (1.0 + cursorGust * 0.45);
+
+        // 3. Sweeping diagonal wind gusts across the golden wheat field
+        float wheatPhase = (jCenterUV.x * 9.2 - jCenterUV.y * 6.8) - t * 2.45;
+        float wheatWave = sin(wheatPhase) * 0.64
+                        + sin(wheatPhase * 2.15 - t * 1.1) * 0.36;
+        vec2 wheatDisp = vec2(-wheatWave * 0.0052, wheatWave * 0.0034) * m.b * (1.0 + cursorGust * 0.65);
+
+        vec2 totalDisp = capeDisp + hairDisp + wheatDisp;
+        vec2 sampleUV = clamp(jCenterUV + totalDisp, vec2(0.001), vec2(0.999));
+
+        // Guard against sampling across protected static boundaries (sword, face, torso)
+        if (m.b > 0.05 && m.r < 0.05) {
+            float destWheat = texture(jolentaMaskTex, sampleUV).b;
+            sampleUV = mix(jCenterUV, sampleUV, smoothstep(0.01, 0.14, destWheat));
+        }
+
+        vec3 srcRgb = texture(jolentaTex, sampleUV).rgb;
+        float rawLum = dot(srcRgb, vec3(0.299, 0.587, 0.114));
+
+        // Night sky region: twinkling stars & periodic Orb shooting star
+        if (jCenterUV.y < 0.215 && rawLum < 0.085) {
+            // Subtle starry sky twinkle
+            float starSeed = hash21(jCellIdx * 1.37 + vec2(7.1, 3.9));
+            if (starSeed > 0.9965) {
+                float tw = 0.55 + 0.45 * sin(t * (2.2 + fract(starSeed * 91.7) * 3.5) + starSeed * 40.0);
+                int sLvl = (tw > 0.80) ? 3 : ((tw > 0.48) ? 2 : 1);
+                vec3 starCol = mix(vec3(0.98, 0.86, 0.55), vec3(1.0, 0.99, 0.96), tw);
+                float sMask = sampleShadeBlock(sLvl, jCellUV) * (0.55 + tw * 0.42);
+                fragColor = vec4(mix(bgCol, starCol, sMask), 1.0) * ubuf.qt_Opacity;
+                return;
+            }
+
+            // Periodic diagonal shooting star (every 6.5s, streaking upper-right -> lower-left like Orb)
+            float cycle = mod(t + 1.8, 6.5);
+            if (cycle < 1.35) {
+                float prog = cycle / 1.35;
+                float cycleIdx = floor((t + 1.8) / 6.5);
+                float startX = 0.88 - mod(cycleIdx * 0.23, 0.42);
+                vec2 headUV = vec2(startX, 0.035) + vec2(-0.24, 0.135) * prog;
+                vec2 dir = normalize(vec2(-0.24 * aspect, 0.135));
+                vec2 rel = (jCenterUV - headUV) * vec2(aspect, 1.0);
+                float along = -dot(rel, dir); // positive behind head
+                float perp = length(rel + dir * along);
+                float tailLen = 0.13;
+                if (along >= -0.006 && along < tailLen && perp < 0.0048) {
+                    float fade = (1.0 - clamp(along / tailLen, 0.0, 1.0)) * sin(prog * 3.14159265);
+                    if (fade > 0.12) {
+                        int mLvl = (fade > 0.72) ? 4 : ((fade > 0.42) ? 3 : 2);
+                        vec3 meteorCol = mix(vec3(0.96, 0.78, 0.38), vec3(1.0, 1.0, 1.0), clamp(fade * 1.25, 0.0, 1.0));
+                        float mMask = sampleShadeBlock(mLvl, jCellUV) * clamp(fade * 1.2, 0.25, 0.98);
+                        fragColor = vec4(mix(bgCol, meteorCol, mMask), 1.0) * ubuf.qt_Opacity;
+                        return;
+                    }
+                }
+            }
+
+            fragColor = vec4(bgCol, 1.0) * ubuf.qt_Opacity;
+            return;
+        }
+
+        // Painterly contrast & rich golden/terracotta color grading for ASCII shade-blocks
+        vec3 boostedRgb = mix(vec3(rawLum), srcRgb, 1.18);
+        float lum = clamp(smoothstep(0.03, 0.94, rawLum), 0.0, 0.999);
+
+        // Add subtle sunlight shimmer along wind-crests in the wheat field
+        if (m.b > 0.15) {
+            float crest = max(0.0, sin((jCenterUV.x * 9.2 - jCenterUV.y * 6.8) - t * 2.45));
+            boostedRgb += vec3(0.10, 0.08, 0.02) * pow(crest, 3.0) * m.b;
+            lum = clamp(lum + 0.06 * pow(crest, 3.0) * m.b, 0.0, 0.999);
+        }
+
+        if (lum < 0.045) {
+            fragColor = vec4(bgCol, 1.0) * ubuf.qt_Opacity;
+            return;
+        }
+
+        int shadeLvl = 1 + int(floor(lum * 3.99));
+        // Modulate color brightness slightly within each shade tier so facial features & sword bevels stay crisp
+        float tierFrac = fract(lum * 3.99);
+        vec3 cellCol = clamp(boostedRgb * (0.86 + 0.26 * tierFrac), 0.0, 1.0);
+        float cellAlpha = clamp(0.72 + lum * 0.28, 0.72, 0.99);
+
+        float blockMask = sampleShadeBlock(shadeLvl, jCellUV) * cellAlpha;
+        vec3 finalJolenta = mix(bgCol, cellCol, blockMask);
+        fragColor = vec4(finalJolenta, 1.0) * ubuf.qt_Opacity;
         return;
     } else {
         vec3 wpSample = texture(wallpaperTex, cellCenterUV).rgb;
