@@ -68,6 +68,25 @@ PanelWindow {
     readonly property color barFill: Qt.rgba(1.0, 1.0, 1.0, 0.90)
     readonly property int cardRadius: 20
 
+    // Adaptive Per-Widget Light/Dark Text & Icon Tokens (sampled strictly behind each card)
+    readonly property bool clockLight: !!(root.stats && root.stats.clock_light)
+    readonly property color clockTextPrimary: clockLight ? "#121418" : root.textPrimary
+    readonly property color clockTextSecondary: clockLight ? Qt.rgba(0.07, 0.08, 0.10, 0.72) : root.textSecondary
+
+    readonly property bool weatherLight: !!(root.stats && root.stats.weather_light)
+    readonly property color weatherTextPrimary: weatherLight ? "#121418" : root.textPrimary
+    readonly property color weatherTextSecondary: weatherLight ? Qt.rgba(0.07, 0.08, 0.10, 0.72) : root.textSecondary
+
+    readonly property bool sysMonLight: !!(root.stats && root.stats.sysmon_light)
+    readonly property color sysTextPrimary: sysMonLight ? "#121418" : root.textPrimary
+    readonly property color sysIconColor: sysMonLight ? Qt.rgba(0.07, 0.08, 0.10, 0.90) : Qt.rgba(1.0, 1.0, 1.0, 0.90)
+    readonly property color sysLabelColor: sysMonLight ? Qt.rgba(0.07, 0.08, 0.10, 0.68) : Qt.rgba(1.0, 1.0, 1.0, 0.62)
+    readonly property color sysPowerHover: sysMonLight ? Qt.rgba(0.07, 0.08, 0.10, 0.60) : root.barFill
+    readonly property string sysTrackColor: sysMonLight ? "rgba(0, 0, 0, 0.14)" : "rgba(255, 255, 255, 0.16)"
+    readonly property string sysRingGreen: sysMonLight ? "#1D9A43" : "#30D158"
+    readonly property string sysRingWarn: sysMonLight ? "#D97706" : "#FF9F0A"
+    readonly property string sysRingDanger: sysMonLight ? "#DC2626" : "#FF453A"
+
     // Dynamic stats & synced lyrics fetched from helper script
     property var stats: ({
         "wallpaper": "",
@@ -176,6 +195,8 @@ PanelWindow {
         property int cornerRadius: root.cardRadius
         property real globalOffsetX: 0
         property real globalOffsetY: 0
+        property color fillColor: root.cardBg
+        property color edgeColor: root.cardEdgeHighlight
 
         Rectangle {
             id: cardMask
@@ -195,7 +216,7 @@ PanelWindow {
             // 1. Pure Neutral Translucent Glass Surface (triggers Hyprland real-time GPU Dual-Kawase blur)
             Rectangle {
                 anchors.fill: parent
-                color: root.cardBg
+                color: cardRoot.fillColor
                 border.width: 0
             }
 
@@ -218,7 +239,7 @@ PanelWindow {
             radius: cardRoot.cornerRadius
             color: "transparent"
             border.width: 1
-            border.color: root.cardEdgeHighlight
+            border.color: cardRoot.edgeColor
         }
     }
 
@@ -259,7 +280,7 @@ PanelWindow {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: Qt.formatDateTime(liveClock.date, "hh:mm ap").toUpperCase()
                     font.pixelSize: 38
-                    color: root.textPrimary
+                    color: root.clockTextPrimary
                     font.family: fontNdot57.name || "Fira Sans"
                 }
 
@@ -270,8 +291,9 @@ PanelWindow {
                     text: Qt.formatDateTime(liveClock.date, "ddd, MMM dd, yyyy").toUpperCase()
                     font.pixelSize: 12
                     font.letterSpacing: 1.2
-                    color: root.textSecondary
+                    color: root.clockTextSecondary
                     font.family: fontNMono.name || "Fira Sans"
+                    renderType: Text.NativeRendering
                 }
             }
 
@@ -285,14 +307,27 @@ PanelWindow {
                 globalOffsetX: row1.leftW + root.gridGap
                 globalOffsetY: 0
 
-                // Top-Left: Nothing Dot-Matrix Weather Icon (Sun + Cloud)
-                Image {
+                // Top-Left: Nothing Dot-Matrix Weather Icon (Sun + Cloud) with Adaptive Tint
+                Item {
                     x: 15
                     y: 13
                     width: 38
                     height: 31
-                    source: Qt.resolvedUrl("../assets/weather-dot.svg")
-                    sourceSize: Qt.size(38, 31)
+
+                    Image {
+                        id: weatherDotIcon
+                        anchors.fill: parent
+                        source: Qt.resolvedUrl("../assets/weather-dot.svg")
+                        sourceSize: Qt.size(38, 31)
+                        visible: !root.weatherLight
+                    }
+
+                    ColorOverlay {
+                        anchors.fill: weatherDotIcon
+                        source: weatherDotIcon
+                        color: root.weatherTextPrimary
+                        visible: root.weatherLight
+                    }
                 }
 
                 // Top-Right: High / Low Temperatures (H 31° / L 25°)
@@ -307,8 +342,9 @@ PanelWindow {
                         text: root.stats.weather_high || "H 31°"
                         font.pixelSize: 10
                         font.letterSpacing: 0.5
-                        color: root.textSecondary
+                        color: root.weatherTextSecondary
                         font.family: fontNMono.name || "Fira Sans"
+                        renderType: Text.NativeRendering
                     }
 
                     Text {
@@ -316,8 +352,9 @@ PanelWindow {
                         text: root.stats.weather_low || "L 25°"
                         font.pixelSize: 10
                         font.letterSpacing: 0.5
-                        color: root.textSecondary
+                        color: root.weatherTextSecondary
                         font.family: fontNMono.name || "Fira Sans"
+                        renderType: Text.NativeRendering
                     }
                 }
 
@@ -327,7 +364,7 @@ PanelWindow {
                     y: 44
                     text: root.stats.weather_temp || "29°"
                     font.pixelSize: 48
-                    color: root.textPrimary
+                    color: root.weatherTextPrimary
                     font.family: fontNdot55.name || "Fira Sans"
                 }
 
@@ -346,9 +383,10 @@ PanelWindow {
                         text: (root.stats.weather_desc || "PARTLY CLOUDY").toUpperCase()
                         font.pixelSize: 11
                         font.letterSpacing: 0.4
-                        color: root.textPrimary
+                        color: root.weatherTextPrimary
                         elide: Text.ElideRight
                         font.family: fontNType.name || "Fira Sans"
+                        renderType: Text.NativeRendering
                     }
 
                     Item {
@@ -360,11 +398,12 @@ PanelWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             width: Math.max(40, parent.width - weatherMetaText.implicitWidth - 6)
                             text: (root.stats.weather_location || "JAKARTA").toUpperCase()
-                            font.pixelSize: 9
+                            font.pixelSize: 10
                             font.letterSpacing: 0.4
-                            color: root.textSecondary
+                            color: root.weatherTextSecondary
                             elide: Text.ElideRight
                             font.family: fontNMono.name || "Fira Sans"
+                            renderType: Text.NativeRendering
                         }
 
                         Text {
@@ -372,10 +411,11 @@ PanelWindow {
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
                             text: (root.stats.weather_meta || "78% · 14 KM/H").toUpperCase()
-                            font.pixelSize: 9
+                            font.pixelSize: 10
                             font.letterSpacing: 0.3
-                            color: root.textSecondary
+                            color: root.weatherTextSecondary
                             font.family: fontNMono.name || "Fira Sans"
+                            renderType: Text.NativeRendering
                         }
                     }
                 }
@@ -854,32 +894,32 @@ PanelWindow {
                                 pct: root.stats.battery_pct !== undefined ? root.stats.battery_pct : 100,
                                 label: "BATTERY",
                                 ringColor: (root.stats.battery_pct !== undefined && root.stats.battery_pct <= 20 && root.stats.battery_status !== "Charging")
-                                    ? "#FF453A"
-                                    : "#30D158"
+                                    ? root.sysRingDanger
+                                    : root.sysRingGreen
                             },
                             {
                                 icon: "󰍛",
                                 pct: root.stats.ram_pct !== undefined ? root.stats.ram_pct : 35,
                                 label: "RAM · " + (root.stats.ram_used || "5.6G"),
                                 ringColor: (root.stats.ram_pct !== undefined && root.stats.ram_pct >= 85)
-                                    ? "#FF9F0A"
-                                    : "#30D158"
+                                    ? root.sysRingWarn
+                                    : root.sysRingGreen
                             },
                             {
                                 icon: "󰋊",
                                 pct: root.stats.root_pct !== undefined ? root.stats.root_pct : 16,
                                 label: "ROOT · " + ((root.stats.root_used || "116G").split(" ")[0] + "G"),
                                 ringColor: (root.stats.root_pct !== undefined && root.stats.root_pct >= 85)
-                                    ? "#FF453A"
-                                    : "#30D158"
+                                    ? root.sysRingDanger
+                                    : root.sysRingGreen
                             },
                             {
                                 icon: "󱂵",
                                 pct: root.stats.home_pct !== undefined ? root.stats.home_pct : 16,
                                 label: "HOME · " + ((root.stats.home_used || "116G").split(" ")[0] + "G"),
                                 ringColor: (root.stats.home_pct !== undefined && root.stats.home_pct >= 85)
-                                    ? "#FF453A"
-                                    : "#30D158"
+                                    ? root.sysRingDanger
+                                    : root.sysRingGreen
                             }
                         ]
 
@@ -899,10 +939,12 @@ PanelWindow {
                                     antialiasing: true
 
                                     property real progress: Math.max(0.0, Math.min(1.0, (modelData.pct || 0) / 100.0))
-                                    property string arcColor: modelData.ringColor || "#30D158"
+                                    property string arcColor: modelData.ringColor || root.sysRingGreen
+                                    property string trackColor: root.sysTrackColor
 
                                     onProgressChanged: requestPaint()
                                     onArcColorChanged: requestPaint()
+                                    onTrackColorChanged: requestPaint()
 
                                     onPaint: {
                                         var ctx = getContext("2d");
@@ -916,7 +958,7 @@ PanelWindow {
                                         ctx.beginPath();
                                         ctx.arc(cx, cy, r, 0, Math.PI * 2.0, false);
                                         ctx.lineWidth = lw;
-                                        ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+                                        ctx.strokeStyle = trackColor;
                                         ctx.stroke();
 
                                         // 2. Active Progress Arc (starts at top -90 deg)
@@ -939,7 +981,7 @@ PanelWindow {
                                     text: modelData.icon
                                     font.family: "FiraCode Nerd Font"
                                     font.pixelSize: 21
-                                    color: Qt.rgba(1.0, 1.0, 1.0, 0.90)
+                                    color: root.sysIconColor
                                 }
                             }
 
@@ -951,7 +993,7 @@ PanelWindow {
                                 font.family: fontNType.name || "Fira Sans"
                                 font.pixelSize: 14
                                 font.bold: true
-                                color: root.textPrimary
+                                color: root.sysTextPrimary
                             }
 
                             // Micro Label (BATTERY, RAM, ROOT, HOME)
@@ -960,9 +1002,10 @@ PanelWindow {
                                 horizontalAlignment: Text.AlignHCenter
                                 text: modelData.label
                                 font.family: fontNMono.name || "monospace"
-                                font.pixelSize: 9
-                                font.letterSpacing: 0.5
-                                color: Qt.rgba(1.0, 1.0, 1.0, 0.62)
+                                font.pixelSize: 10
+                                font.letterSpacing: 0.4
+                                renderType: Text.NativeRendering
+                                color: root.sysLabelColor
                                 elide: Text.ElideRight
                                 maximumLineCount: 1
                             }
@@ -991,7 +1034,7 @@ PanelWindow {
                         text: "󰌾"
                         font.family: "FiraCode Nerd Font"
                         font.pixelSize: 20
-                        color: lockMouse.containsMouse ? root.barFill : root.textPrimary
+                        color: lockMouse.containsMouse ? root.sysPowerHover : root.sysTextPrimary
                         scale: lockMouse.pressed ? 0.9 : 1.0
 
                         MouseArea {
@@ -1009,7 +1052,7 @@ PanelWindow {
                         text: "󰤄"
                         font.family: "FiraCode Nerd Font"
                         font.pixelSize: 21
-                        color: sleepMouse.containsMouse ? root.barFill : root.textPrimary
+                        color: sleepMouse.containsMouse ? root.sysPowerHover : root.sysTextPrimary
                         scale: sleepMouse.pressed ? 0.9 : 1.0
 
                         MouseArea {
@@ -1027,7 +1070,7 @@ PanelWindow {
                         text: "󰐥"
                         font.family: "FiraCode Nerd Font"
                         font.pixelSize: 21
-                        color: powerMouse.containsMouse ? "#ff7b7b" : root.textPrimary
+                        color: powerMouse.containsMouse ? root.sysRingDanger : root.sysTextPrimary
                         scale: powerMouse.pressed ? 0.9 : 1.0
 
                         MouseArea {
@@ -1045,7 +1088,7 @@ PanelWindow {
                         text: "󰑐"
                         font.family: "FiraCode Nerd Font"
                         font.pixelSize: 21
-                        color: rebootMouse.containsMouse ? root.barFill : root.textPrimary
+                        color: rebootMouse.containsMouse ? root.sysPowerHover : root.sysTextPrimary
                         scale: rebootMouse.pressed ? 0.9 : 1.0
 
                         MouseArea {

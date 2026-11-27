@@ -101,6 +101,100 @@ elif os.path.exists(blurred_wp):
 else:
     data["wallpaper"] = raw_wp
 
+
+def compute_widget_luminances(wp_path):
+    """Computes cached per-widget relative luminance (0..1) behind Clock, Weather, and System Monitor."""
+    lum_cache_file = "/tmp/glyph_widget_lum_cache_v2.json"
+    ascii_state_file = os.path.join(cache_dir, "ascii_state.json")
+
+    src_key = ""
+    hex_override = None
+    sample_img = wp_path
+
+    # Respect live ASCII wallpaper mode if enabled
+    if os.path.exists(ascii_state_file):
+        try:
+            with open(ascii_state_file, "r") as f:
+                astate = json.load(f)
+            if astate.get("enabled"):
+                preset = astate.get("preset", "")
+                bg_hex = str(astate.get("bg_color", "#07080A")).strip()
+                if preset == "jolenta-orb":
+                    jolenta_path = os.path.expanduser(
+                        "~/.config/quickshell/DesktopWidgetsApp/wallpaper/jolenta_16x9.png"
+                    )
+                    if os.path.isfile(jolenta_path):
+                        sample_img = jolenta_path
+                        src_key = f"ascii:jolenta:{int(os.path.getmtime(jolenta_path))}"
+                if not src_key:
+                    hex_override = bg_hex
+                    src_key = f"ascii:hex:{bg_hex}"
+        except Exception:
+            pass
+
+    if not src_key and sample_img and os.path.isfile(sample_img):
+        try:
+            src_key = f"img:{sample_img}:{int(os.path.getmtime(sample_img))}"
+        except Exception:
+            src_key = f"img:{sample_img}"
+
+    # Fast cache hit (0 image I/O on repeated polls)
+    if src_key and os.path.exists(lum_cache_file):
+        try:
+            with open(lum_cache_file, "r") as f:
+                cached = json.load(f)
+            if cached.get("key") == src_key and isinstance(cached.get("lums"), dict):
+                return cached["lums"]
+        except Exception:
+            pass
+
+    # Normalized boxes (x0, y0, x1, y1) matching each card's exact position on 1920x1080
+    regions = {
+        "clock": (0.017, 0.067, 0.140, 0.218),
+        "weather": (0.146, 0.067, 0.244, 0.218),
+        "sysmon": (0.110, 0.630, 0.244, 0.900),
+    }
+    lums = {"clock": 0.15, "weather": 0.15, "sysmon": 0.15}
+
+    try:
+        if hex_override and re.match(r"^#[0-9A-Fa-f]{6}$", hex_override):
+            r = int(hex_override[1:3], 16)
+            g = int(hex_override[3:5], 16)
+            b = int(hex_override[5:7], 16)
+            v = round((0.299 * r + 0.587 * g + 0.114 * b) / 255.0, 4)
+            lums = {"clock": v, "weather": v, "sysmon": v}
+        elif sample_img and os.path.isfile(sample_img):
+            with Image.open(sample_img) as im:
+                im_rgb = im.convert("RGB")
+                w, h = im_rgb.size
+                for name, (fx0, fy0, fx1, fy1) in regions.items():
+                    x0 = int(w * fx0)
+                    x1 = max(x0 + 1, int(w * fx1))
+                    y0 = int(h * fy0)
+                    y1 = max(y0 + 1, int(h * fy1))
+                    crop = im_rgb.crop((x0, y0, x1, y1)).resize((1, 1), Image.Resampling.BILINEAR)
+                    r, g, b = crop.getpixel((0, 0))
+                    lums[name] = round((0.299 * r + 0.587 * g + 0.114 * b) / 255.0, 4)
+    except Exception:
+        pass
+
+    if src_key:
+        try:
+            with open(lum_cache_file, "w") as f:
+                json.dump({"key": src_key, "lums": lums}, f)
+        except Exception:
+            pass
+    return lums
+
+
+widget_lums = compute_widget_luminances(data.get("wallpaper", ""))
+data["clock_lum"] = round(widget_lums["clock"], 3)
+data["clock_light"] = widget_lums["clock"] > 0.56
+data["weather_lum"] = round(widget_lums["weather"], 3)
+data["weather_light"] = widget_lums["weather"] > 0.56
+data["sysmon_lum"] = round(widget_lums["sysmon"], 3)
+data["sysmon_light"] = widget_lums["sysmon"] > 0.56
+
 # 1. Disk usage
 try:
     root = shutil.disk_usage('/')
